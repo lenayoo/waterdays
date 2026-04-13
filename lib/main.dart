@@ -1,7 +1,8 @@
-import 'package:waterdays/app_strings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:waterdays/app_localizations.dart';
 
 void main() {
   runApp(const WaterDaysApp());
@@ -10,7 +11,9 @@ void main() {
 const MethodChannel _widgetChannel = MethodChannel(AppStrings.channelName);
 
 class WaterDaysApp extends StatelessWidget {
-  const WaterDaysApp({super.key});
+  const WaterDaysApp({super.key, this.locale});
+
+  final Locale? locale;
 
   @override
   Widget build(BuildContext context) {
@@ -24,48 +27,92 @@ class WaterDaysApp extends StatelessWidget {
       useMaterial3: true,
     );
 
-    final textTheme = GoogleFonts.nanumMyeongjoTextTheme(base.textTheme).apply(
-      bodyColor: const Color(0xFF21384B),
-      displayColor: const Color(0xFF21384B),
-    );
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: AppStrings.appTitle,
-      theme: base.copyWith(
-        textTheme: textTheme,
-        dialogTheme: DialogThemeData(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+      locale: locale,
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      localeResolutionCallback: (locale, supportedLocales) {
+        if (locale == null) {
+          return supportedLocales.first;
+        }
+
+        for (final supportedLocale in supportedLocales) {
+          if (supportedLocale.languageCode == locale.languageCode) {
+            return supportedLocale;
+          }
+        }
+        return const Locale('en');
+      },
+      builder: (context, child) {
+        final textTheme = _localizedTextTheme(
+          base.textTheme,
+          AppLocalizations.of(context),
+        ).apply(
+          bodyColor: const Color(0xFF21384B),
+          displayColor: const Color(0xFF21384B),
+        );
+
+        return Theme(
+          data: base.copyWith(
+            textTheme: textTheme,
+            dialogTheme: DialogThemeData(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+            ),
+            inputDecorationTheme: InputDecorationTheme(
+              hintStyle: textTheme.bodyLarge?.copyWith(
+                color: const Color(0xFF8A9BA9),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 18,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(
+                  color: Color(0xFF5D9FD6),
+                  width: 1.3,
+                ),
+              ),
+            ),
           ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          hintStyle: textTheme.bodyLarge?.copyWith(
-            color: const Color(0xFF8A9BA9),
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 18,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xFF5D9FD6), width: 1.3),
-          ),
-        ),
-      ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const WaterFlowPage(),
     );
+  }
+
+  TextTheme _localizedTextTheme(
+    TextTheme baseTextTheme,
+    AppLocalizations localizations,
+  ) {
+    if (localizations.isKorean) {
+      return GoogleFonts.gaeguTextTheme(baseTextTheme);
+    }
+    if (localizations.isJapanese) {
+      return GoogleFonts.yomogiTextTheme(baseTextTheme);
+    }
+    return GoogleFonts.patrickHandTextTheme(baseTextTheme);
   }
 }
 
@@ -219,12 +266,16 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
           context: context,
           builder:
               (context) => AlertDialog(
-                title: const Text(AppStrings.completionDialogTitle),
-                content: const Text(AppStrings.completionDialogContent),
+                title: Text(AppLocalizations.of(context).completionDialogTitle),
+                content: Text(
+                  AppLocalizations.of(context).completionDialogContent,
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(AppStrings.completionDialogAction),
+                    child: Text(
+                      AppLocalizations.of(context).completionDialogAction,
+                    ),
                   ),
                 ],
               ),
@@ -380,16 +431,15 @@ class _AmbientDrop extends StatelessWidget {
 }
 
 class _GoalStep extends StatelessWidget {
-  const _GoalStep({
-    required this.controller,
-    required this.onNext,
-  });
+  const _GoalStep({required this.controller, required this.onNext});
 
   final TextEditingController controller;
   final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -399,7 +449,7 @@ class _GoalStep extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              AppStrings.goalTitle,
+              l10n.goalTitle,
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -413,20 +463,20 @@ class _GoalStep extends StatelessWidget {
                 LengthLimitingTextInputFormatter(2),
                 _GoalLimitFormatter(),
               ],
-              decoration: const InputDecoration(
-                hintText: AppStrings.goalHint,
-                suffixText: AppStrings.goalSuffix,
+              decoration: InputDecoration(
+                hintText: l10n.goalHint,
+                suffixText: l10n.goalSuffix,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              AppStrings.goalHelper,
+              l10n.goalHelper,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: const Color(0xFF7A8E9F)),
             ),
             const SizedBox(height: 18),
-            _PrimaryActionButton(label: AppStrings.nextButton, onTap: onNext),
+            _PrimaryActionButton(label: l10n.nextButton, onTap: onNext),
           ],
         ),
         const Spacer(),
@@ -450,6 +500,8 @@ class _SummaryStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -459,7 +511,7 @@ class _SummaryStep extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              AppStrings.summaryGoal(goalCups),
+              l10n.summaryGoal(goalCups),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 height: 1.45,
@@ -467,12 +519,12 @@ class _SummaryStep extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             _PrimaryActionButton(
-              label: AppStrings.viewMonthlyRecordButton,
+              label: l10n.viewMonthlyRecordButton,
               onTap: onCalendar,
             ),
             const SizedBox(height: 10),
             _SecondaryActionButton(
-              label: AppStrings.startTrackingButton,
+              label: l10n.startTrackingButton,
               onTap: onStart,
             ),
           ],
@@ -504,12 +556,13 @@ class _CalendarStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final firstDay = DateTime(month.year, month.month, 1);
     final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final leadingEmpty = firstDay.weekday % 7;
-    final labels = ['일', '월', '화', '수', '목', '금', '토'];
+    final labels = l10n.weekdayLabels;
     final stats = _monthStats(month, history, today);
-    final message = _monthMessage(month, stats, today);
+    final message = _monthMessage(l10n, month, stats, today);
 
     return SingleChildScrollView(
       child: Column(
@@ -523,7 +576,7 @@ class _CalendarStep extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    AppStrings.monthRecordTitle(month),
+                    l10n.monthRecordTitle(month),
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -587,7 +640,7 @@ class _CalendarStep extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Text(
-                AppStrings.calendarLegend,
+                l10n.calendarLegend,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF6C8496),
                 ),
@@ -601,7 +654,7 @@ class _CalendarStep extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               _PrimaryActionButton(
-                label: AppStrings.goToTodayTrackingButton,
+                label: l10n.goToTodayTrackingButton,
                 onTap: onStart,
               ),
             ],
@@ -653,6 +706,7 @@ class _CalendarStep extends StatelessWidget {
   }
 
   static String _monthMessage(
+    AppLocalizations l10n,
     DateTime month,
     ({int completed, int incomplete}) stats,
     DateTime today,
@@ -661,14 +715,14 @@ class _CalendarStep extends StatelessWidget {
     final viewedMonth = DateTime(month.year, month.month);
 
     if (viewedMonth == currentMonth) {
-      return AppStrings.currentMonthHabitMessage(month);
+      return l10n.currentMonthHabitMessage(month);
     }
 
     if (stats.completed > stats.incomplete) {
-      return AppStrings.goodPastMonthMessage;
+      return l10n.goodPastMonthMessage;
     }
 
-    return AppStrings.badPastMonthMessage;
+    return l10n.badPastMonthMessage;
   }
 }
 
@@ -747,6 +801,8 @@ class _TrackerStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -762,7 +818,7 @@ class _TrackerStep extends StatelessWidget {
                     child: Column(
                       children: [
                         Text(
-                          AppStrings.trackerGoal(goalCups),
+                          l10n.trackerGoal(goalCups),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
@@ -821,6 +877,8 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Row(
       children: [
         if (showBack)
@@ -835,7 +893,7 @@ class _Header extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                AppStrings.appTitle,
+                l10n.appTitle,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w700,
@@ -970,10 +1028,11 @@ class WaterCup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Semantics(
       button: true,
-      label:
-          isFilled ? AppStrings.filledCupSemantic : AppStrings.emptyCupSemantic,
+      label: isFilled ? l10n.filledCupSemantic : l10n.emptyCupSemantic,
       child: InkWell(
         onTap: isDisabled ? null : onTap,
         borderRadius: BorderRadius.circular(28),
