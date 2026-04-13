@@ -112,7 +112,7 @@ class WaterDaysApp extends StatelessWidget {
     if (localizations.isJapanese) {
       return GoogleFonts.yomogiTextTheme(baseTextTheme);
     }
-    return GoogleFonts.patrickHandTextTheme(baseTextTheme);
+    return GoogleFonts.cormorantGaramondTextTheme(baseTextTheme);
   }
 }
 
