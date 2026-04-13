@@ -1,46 +1,75 @@
-import 'dart:math' as math;
-
+import 'package:waterdays/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   runApp(const WaterDaysApp());
 }
+
+const MethodChannel _widgetChannel = MethodChannel(AppStrings.channelName);
 
 class WaterDaysApp extends StatelessWidget {
   const WaterDaysApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final base = ThemeData(
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF5D9FD6),
+        secondary: Color(0xFF8DBFE7),
+        surface: Color(0xFFF8FBFD),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF8FBFD),
+      useMaterial3: true,
+    );
+
+    final textTheme = GoogleFonts.nanumMyeongjoTextTheme(base.textTheme).apply(
+      bodyColor: const Color(0xFF21384B),
+      displayColor: const Color(0xFF21384B),
+    );
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'waterdays',
-      theme: ThemeData(
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF1D7ED6),
-          secondary: Color(0xFF7EC8F3),
-          surface: Color(0xFFF6F8FB),
+      title: AppStrings.appTitle,
+      theme: base.copyWith(
+        textTheme: textTheme,
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
         ),
-        scaffoldBackgroundColor: const Color(0xFFEAF4FB),
-        fontFamily: 'SF Pro Rounded',
-        fontFamilyFallback: const [
-          'Arial Rounded MT Bold',
-          'Trebuchet MS',
-          'sans-serif',
-        ],
-        useMaterial3: true,
+        inputDecorationTheme: InputDecorationTheme(
+          hintStyle: textTheme.bodyLarge?.copyWith(
+            color: const Color(0xFF8A9BA9),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 18,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFFD6E2EC)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFF5D9FD6), width: 1.3),
+          ),
+        ),
       ),
       home: const WaterFlowPage(),
     );
   }
 }
 
-enum FlowStep {
-  name,
-  goal,
-  summary,
-  tracker,
-}
+enum FlowStep { goal, summary, calendar, tracker }
 
 class _GoalLimitFormatter extends TextInputFormatter {
   @override
@@ -69,43 +98,37 @@ class WaterFlowPage extends StatefulWidget {
 }
 
 class _WaterFlowPageState extends State<WaterFlowPage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _goalController = TextEditingController(text: '8');
+  final TextEditingController _goalController = TextEditingController(
+    text: '8',
+  );
 
-  FlowStep _step = FlowStep.name;
+  FlowStep _step = FlowStep.goal;
   int _goalCups = 8;
   List<bool> _cupStates = List<bool>.filled(8, false);
+  late DateTime _calendarMonth;
+  late final Map<DateTime, bool> _history;
+  bool _completionShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final today = _dateOnly(DateTime.now());
+    _calendarMonth = DateTime(today.year, today.month);
+    _history = _seedHistory(today);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncWidget());
+  }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _goalController.dispose();
     super.dispose();
   }
 
-  String get _displayName {
-    final trimmed = _nameController.text.trim();
-    return trimmed.isEmpty ? 'waterdays' : trimmed;
-  }
-
-  String get _todayLabel {
-    final now = DateTime.now();
-    return '${now.month}월 ${now.day}일';
-  }
+  DateTime get _today => _dateOnly(DateTime.now());
 
   int get _drankCups => _cupStates.where((filled) => filled).length;
 
   bool get _isGoalComplete => _drankCups >= _goalCups;
-
-  void _goToGoalStep() {
-    if (_nameController.text.trim().isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _step = FlowStep.goal;
-    });
-  }
 
   void _goToSummaryStep() {
     final parsed = int.tryParse(_goalController.text.trim());
@@ -116,13 +139,22 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     setState(() {
       _goalCups = parsed;
       _cupStates = List<bool>.filled(_goalCups, false);
+      _completionShown = false;
+      _history[_today] = false;
       _step = FlowStep.summary;
     });
+    _syncWidget();
   }
 
   void _startTracking() {
     setState(() {
       _step = FlowStep.tracker;
+    });
+  }
+
+  void _goToCalendar() {
+    setState(() {
+      _step = FlowStep.calendar;
     });
   }
 
@@ -139,6 +171,7 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     setState(() {
       _cupStates[nextIndex] = true;
     });
+    _afterCupChange();
   }
 
   void _decrementCup() {
@@ -153,7 +186,9 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
 
     setState(() {
       _cupStates[lastFilledIndex] = false;
+      _history[_today] = false;
     });
+    _syncWidget();
   }
 
   void _toggleCup(int index) {
@@ -164,47 +199,179 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     setState(() {
       _cupStates[index] = !_cupStates[index];
     });
+    _afterCupChange();
   }
+
+  void _afterCupChange() {
+    final completed = _isGoalComplete;
+    setState(() {
+      _history[_today] = completed;
+    });
+    _syncWidget();
+
+    if (completed && !_completionShown) {
+      _completionShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        showDialog<void>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: const Text(AppStrings.completionDialogTitle),
+                content: const Text(AppStrings.completionDialogContent),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(AppStrings.completionDialogAction),
+                  ),
+                ],
+              ),
+        );
+      });
+    }
+  }
+
+  Future<void> _syncWidget() async {
+    try {
+      await _widgetChannel.invokeMethod<void>('updateWaterProgress', {
+        'drankCups': _drankCups,
+        'goalCups': _goalCups,
+      });
+    } on PlatformException {
+      // iOS widget sync is optional while running on other platforms.
+    }
+  }
+
+  void _showPreviousMonth() {
+    setState(() {
+      _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1);
+    });
+  }
+
+  void _showNextMonth() {
+    final currentMonth = DateTime(_today.year, _today.month);
+    final next = DateTime(_calendarMonth.year, _calendarMonth.month + 1);
+    if (next.isAfter(currentMonth)) {
+      return;
+    }
+
+    setState(() {
+      _calendarMonth = next;
+    });
+  }
+
+  Map<DateTime, bool> _seedHistory(DateTime today) {
+    final history = <DateTime, bool>{};
+
+    final currentMonthStart = DateTime(today.year, today.month, 1);
+    for (var day = 1; day < today.day; day++) {
+      final date = DateTime(today.year, today.month, day);
+      history[date] = day.isEven || day % 5 == 0;
+    }
+
+    final previousMonthStart = DateTime(today.year, today.month - 1, 1);
+    final previousMonthDays = DateUtils.getDaysInMonth(
+      previousMonthStart.year,
+      previousMonthStart.month,
+    );
+    for (var day = 1; day <= previousMonthDays; day++) {
+      final date = DateTime(
+        previousMonthStart.year,
+        previousMonthStart.month,
+        day,
+      );
+      history[date] = day % 3 != 0;
+    }
+
+    history[currentMonthStart] = true;
+    history[_dateOnly(today)] = false;
+    return history;
+  }
+
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          child: Padding(
-            key: ValueKey(_step),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-            child: switch (_step) {
-              FlowStep.name => _NameStep(
-                  controller: _nameController,
-                  onNext: _goToGoalStep,
-                ),
-              FlowStep.goal => _GoalStep(
-                  controller: _goalController,
-                  displayName: _displayName,
-                  onBack: () => setState(() => _step = FlowStep.name),
-                  onNext: _goToSummaryStep,
-                ),
-              FlowStep.summary => _SummaryStep(
-                  displayName: _displayName,
-                  todayLabel: _todayLabel,
-                  goalCups: _goalCups,
-                  onBack: () => setState(() => _step = FlowStep.goal),
-                  onStart: _startTracking,
-                ),
-              FlowStep.tracker => _TrackerStep(
-                  displayName: _displayName,
-                  todayLabel: _todayLabel,
-                  goalCups: _goalCups,
-                  cupStates: _cupStates,
-                  onBack: () => setState(() => _step = FlowStep.summary),
-                  onCupTap: _toggleCup,
-                  isGoalComplete: _isGoalComplete,
-                  onIncrement: _incrementCup,
-                  onDecrement: _decrementCup,
-                ),
-            },
+        child: Stack(
+          children: [
+            const Positioned(
+              top: 36,
+              right: 28,
+              child: _AmbientDrop(size: 48, opacity: 0.18),
+            ),
+            const Positioned(
+              bottom: 72,
+              left: 24,
+              child: _AmbientDrop(size: 84, opacity: 0.12),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              child: Padding(
+                key: ValueKey(_step),
+                padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+                child: switch (_step) {
+                  FlowStep.goal => _GoalStep(
+                    controller: _goalController,
+                    onNext: _goToSummaryStep,
+                  ),
+                  FlowStep.summary => _SummaryStep(
+                    goalCups: _goalCups,
+                    onBack: () => setState(() => _step = FlowStep.goal),
+                    onCalendar: _goToCalendar,
+                    onStart: _startTracking,
+                  ),
+                  FlowStep.calendar => _CalendarStep(
+                    month: _calendarMonth,
+                    history: _history,
+                    today: _today,
+                    onBack: () => setState(() => _step = FlowStep.summary),
+                    onPreviousMonth: _showPreviousMonth,
+                    onNextMonth: _showNextMonth,
+                    onStart: _startTracking,
+                  ),
+                  FlowStep.tracker => _TrackerStep(
+                    goalCups: _goalCups,
+                    cupStates: _cupStates,
+                    onBack: () => setState(() => _step = FlowStep.summary),
+                    onCupTap: _toggleCup,
+                    isGoalComplete: _isGoalComplete,
+                    onIncrement: _incrementCup,
+                    onDecrement: _decrementCup,
+                  ),
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AmbientDrop extends StatelessWidget {
+  const _AmbientDrop({required this.size, required this.opacity});
+
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        width: size,
+        height: size * 1.25,
+        child: CustomPaint(
+          painter: _WaterDropPainter(
+            fillColor: const Color(0xFFB7D9F0).withValues(alpha: opacity),
+            highlightColor: Colors.white.withValues(alpha: opacity * 0.7),
+            borderColor: const Color(
+              0xFFB7D9F0,
+            ).withValues(alpha: opacity * 1.2),
           ),
         ),
       ),
@@ -212,8 +379,8 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
   }
 }
 
-class _NameStep extends StatelessWidget {
-  const _NameStep({
+class _GoalStep extends StatelessWidget {
+  const _GoalStep({
     required this.controller,
     required this.onNext,
   });
@@ -228,137 +395,39 @@ class _NameStep extends StatelessWidget {
       children: [
         const _Header(),
         const Spacer(),
-        _SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '이름을 입력해주세요',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF163047),
-                ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              AppStrings.goalTitle,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(2),
+                _GoalLimitFormatter(),
+              ],
+              decoration: const InputDecoration(
+                hintText: AppStrings.goalHint,
+                suffixText: AppStrings.goalSuffix,
               ),
-              const SizedBox(height: 12),
-              Text(
-                '매일의 물 습관을 귀엽고 가볍게 시작해볼게요.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF607487),
-                ),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  hintText: '이름 또는 닉네임',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(18)),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onNext,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D7ED6),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                  ),
-                  child: const Text('다음'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Spacer(),
-      ],
-    );
-  }
-}
-
-class _GoalStep extends StatelessWidget {
-  const _GoalStep({
-    required this.controller,
-    required this.displayName,
-    required this.onBack,
-    required this.onNext,
-  });
-
-  final TextEditingController controller;
-  final String displayName;
-  final VoidCallback onBack;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Header(showBack: true, onBack: onBack),
-        const Spacer(),
-        _SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '오늘은 몇 잔을 목표로 할까요?',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF163047),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '$displayName 님에게 딱 맞는 오늘의 목표를 정해주세요.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF607487),
-                ),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(2),
-                  _GoalLimitFormatter(),
-                ],
-                decoration: const InputDecoration(
-                  hintText: '1~16',
-                  suffixText: '잔',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(18)),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '최대 16잔까지 설정할 수 있어요.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF6F8292),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onNext,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D7ED6),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                  ),
-                  child: const Text('다음'),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              AppStrings.goalHelper,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: const Color(0xFF7A8E9F)),
+            ),
+            const SizedBox(height: 18),
+            _PrimaryActionButton(label: AppStrings.nextButton, onTap: onNext),
+          ],
         ),
         const Spacer(),
       ],
@@ -368,17 +437,15 @@ class _GoalStep extends StatelessWidget {
 
 class _SummaryStep extends StatelessWidget {
   const _SummaryStep({
-    required this.displayName,
-    required this.todayLabel,
     required this.goalCups,
     required this.onBack,
+    required this.onCalendar,
     required this.onStart,
   });
 
-  final String displayName;
-  final String todayLabel;
   final int goalCups;
   final VoidCallback onBack;
+  final VoidCallback onCalendar;
   final VoidCallback onStart;
 
   @override
@@ -388,52 +455,27 @@ class _SummaryStep extends StatelessWidget {
       children: [
         _Header(showBack: true, onBack: onBack),
         const Spacer(),
-        _SectionCard(
-          accentColor: const Color(0xFF103551),
-          child: Column(
-            children: [
-              Container(
-                width: 92,
-                height: 92,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.94),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  todayLabel,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF12314A),
-                  ),
-                ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              AppStrings.summaryGoal(goalCups),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.45,
               ),
-              const SizedBox(height: 20),
-              Text(
-                '$displayName 님의 오늘 목표는\n$todayLabel $goalCups잔이에요.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onStart,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF103551),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                  ),
-                  child: const Text('물마시기로 시작하기'),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+            _PrimaryActionButton(
+              label: AppStrings.viewMonthlyRecordButton,
+              onTap: onCalendar,
+            ),
+            const SizedBox(height: 10),
+            _SecondaryActionButton(
+              label: AppStrings.startTrackingButton,
+              onTap: onStart,
+            ),
+          ],
         ),
         const Spacer(),
       ],
@@ -441,10 +483,251 @@ class _SummaryStep extends StatelessWidget {
   }
 }
 
+class _CalendarStep extends StatelessWidget {
+  const _CalendarStep({
+    required this.month,
+    required this.history,
+    required this.today,
+    required this.onBack,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+    required this.onStart,
+  });
+
+  final DateTime month;
+  final Map<DateTime, bool> history;
+  final DateTime today;
+  final VoidCallback onBack;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final firstDay = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    final leadingEmpty = firstDay.weekday % 7;
+    final labels = ['일', '월', '화', '수', '목', '금', '토'];
+    final stats = _monthStats(month, history, today);
+    final message = _monthMessage(month, stats, today);
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(showBack: true, onBack: onBack),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    AppStrings.monthRecordTitle(month),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: onPreviousMonth,
+                    icon: const Icon(Icons.chevron_left_rounded),
+                  ),
+                  IconButton(
+                    onPressed:
+                        DateTime(month.year, month.month) ==
+                                DateTime(today.year, today.month)
+                            ? null
+                            : onNextMonth,
+                    icon: const Icon(Icons.chevron_right_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children:
+                    labels.map((label) {
+                      return Expanded(
+                        child: Center(
+                          child: Text(
+                            label,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: const Color(0xFF6D8295)),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
+              const SizedBox(height: 14),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 0.76,
+                ),
+                itemCount: leadingEmpty + daysInMonth,
+                itemBuilder: (context, index) {
+                  if (index < leadingEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final day = index - leadingEmpty + 1;
+                  final date = DateTime(month.year, month.month, day);
+                  final status = _statusForDate(date, history, today);
+                  return _CalendarDay(
+                    day: day,
+                    isToday: DateUtils.isSameDay(date, today),
+                    status: status,
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              Text(
+                AppStrings.calendarLegend,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF6C8496),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 18),
+              _PrimaryActionButton(
+                label: AppStrings.goToTodayTrackingButton,
+                onTap: onStart,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static _DayStatus _statusForDate(
+    DateTime date,
+    Map<DateTime, bool> history,
+    DateTime today,
+  ) {
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final state = history[normalizedDate];
+
+    if (state == true) {
+      return _DayStatus.complete;
+    }
+    if (state == false && !normalizedDate.isAfter(normalizedToday)) {
+      return _DayStatus.incomplete;
+    }
+    return _DayStatus.none;
+  }
+
+  static ({int completed, int incomplete}) _monthStats(
+    DateTime month,
+    Map<DateTime, bool> history,
+    DateTime today,
+  ) {
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    var completed = 0;
+    var incomplete = 0;
+
+    for (var day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(month.year, month.month, day);
+      switch (_statusForDate(date, history, today)) {
+        case _DayStatus.complete:
+          completed += 1;
+        case _DayStatus.incomplete:
+          incomplete += 1;
+        case _DayStatus.none:
+          break;
+      }
+    }
+    return (completed: completed, incomplete: incomplete);
+  }
+
+  static String _monthMessage(
+    DateTime month,
+    ({int completed, int incomplete}) stats,
+    DateTime today,
+  ) {
+    final currentMonth = DateTime(today.year, today.month);
+    final viewedMonth = DateTime(month.year, month.month);
+
+    if (viewedMonth == currentMonth) {
+      return AppStrings.currentMonthHabitMessage(month);
+    }
+
+    if (stats.completed > stats.incomplete) {
+      return AppStrings.goodPastMonthMessage;
+    }
+
+    return AppStrings.badPastMonthMessage;
+  }
+}
+
+enum _DayStatus { none, complete, incomplete }
+
+class _CalendarDay extends StatelessWidget {
+  const _CalendarDay({
+    required this.day,
+    required this.isToday,
+    required this.status,
+  });
+
+  final int day;
+  final bool isToday;
+  final _DayStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    Color? dotColor;
+    if (status == _DayStatus.complete) {
+      dotColor = const Color(0xFF3C98F4);
+    } else if (status == _DayStatus.incomplete) {
+      dotColor = const Color(0xFFFF6C78);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isToday ? const Color(0xFF90BEDF) : const Color(0xFFD9E4EC),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '$day',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: dotColor ?? Colors.transparent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TrackerStep extends StatelessWidget {
   const _TrackerStep({
-    required this.displayName,
-    required this.todayLabel,
     required this.goalCups,
     required this.cupStates,
     required this.onBack,
@@ -454,8 +737,6 @@ class _TrackerStep extends StatelessWidget {
     required this.onDecrement,
   });
 
-  final String displayName;
-  final String todayLabel;
   final int goalCups;
   final List<bool> cupStates;
   final VoidCallback onBack;
@@ -466,111 +747,74 @@ class _TrackerStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final drankCups = cupStates.where((filled) => filled).length;
-    final remainingCups = math.max(goalCups - drankCups, 0);
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Header(showBack: true, onBack: onBack),
-          const SizedBox(height: 18),
-          _SectionCard(
-            accentColor: const Color(0xFF103551),
-            child: Column(
-              children: [
-                Text(
-                  '물마시기',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Header(showBack: true, onBack: onBack),
+                  const Spacer(),
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          AppStrings.trackerGoal(goalCups),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 28),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 12,
+                          runSpacing: 16,
+                          children: List.generate(goalCups, (index) {
+                            return WaterCup(
+                              isFilled: cupStates[index],
+                              isDisabled: isGoalComplete,
+                              onTap: () => onCupTap(index),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _RoundControlButton(
+                              icon: Icons.remove,
+                              onTap: onDecrement,
+                              isDisabled: isGoalComplete,
+                            ),
+                            const SizedBox(width: 16),
+                            _RoundControlButton(
+                              icon: Icons.add,
+                              onTap: onIncrement,
+                              filled: true,
+                              isDisabled: isGoalComplete,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '$todayLabel · $displayName 님',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.86),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isGoalComplete
-                      ? '오늘은 목표를 완료했어요!'
-                      : '현재 $drankCups잔 완료 · $remainingCups잔 남음',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
-                  ),
-                ),
-              ],
+                  const Spacer(),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '오늘 목표 $goalCups잔',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF163047),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '컵을 직접 누르거나 + 버튼으로 기록해보세요.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF63788C),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 12,
-                    runSpacing: 16,
-                    children: List.generate(goalCups, (index) {
-                      return WaterCup(
-                        isFilled: cupStates[index],
-                        isDisabled: isGoalComplete,
-                        onTap: () => onCupTap(index),
-                      );
-                    }),
-                  ),
-                ),
-                const SizedBox(height: 22),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _RoundControlButton(
-                      icon: Icons.remove,
-                      onTap: onDecrement,
-                      isDisabled: isGoalComplete,
-                    ),
-                    const SizedBox(width: 16),
-                    _RoundControlButton(
-                      icon: Icons.add,
-                      onTap: onIncrement,
-                      filled: true,
-                      isDisabled: isGoalComplete,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    this.showBack = false,
-    this.onBack,
-  });
+  const _Header({this.showBack = false, this.onBack});
 
   final bool showBack;
   final VoidCallback? onBack;
@@ -583,7 +827,7 @@ class _Header extends StatelessWidget {
           IconButton(
             onPressed: onBack,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            color: const Color(0xFF163047),
+            color: const Color(0xFF34516A),
           )
         else
           const SizedBox(width: 48),
@@ -591,20 +835,11 @@ class _Header extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                'waterdays',
+                AppStrings.appTitle,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF12314A),
-                  letterSpacing: -1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '오늘의 수분 루틴을 편하게 기록해요.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF5D7285),
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF324258),
                 ),
               ),
             ],
@@ -616,39 +851,55 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.child,
-    this.accentColor,
-  });
+class _PrimaryActionButton extends StatelessWidget {
+  const _PrimaryActionButton({required this.label, required this.onTap});
 
-  final Widget child;
-  final Color? accentColor;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: accentColor == null
-            ? null
-            : LinearGradient(
-                colors: [accentColor!, const Color(0xFF3F9AE5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-        color: accentColor == null ? const Color(0xFFDDF1FF) : null,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF74A8CA).withValues(alpha: 0.20),
-            blurRadius: 28,
-            offset: const Offset(0, 18),
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF5D9FD6),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-        ],
+        ),
+        child: Text(label),
       ),
-      child: child,
+    );
+  }
+}
+
+class _SecondaryActionButton extends StatelessWidget {
+  const _SecondaryActionButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF34516A),
+          side: const BorderSide(color: Color(0xFFD6E2EC)),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }
@@ -676,26 +927,29 @@ class _RoundControlButton extends StatelessWidget {
         height: 62,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: isDisabled
-              ? const Color(0xFFD5E1EA)
-              : filled
-                  ? const Color(0xFF1D7ED6)
+          color:
+              isDisabled
+                  ? const Color(0xFFE9EEF2)
+                  : filled
+                  ? const Color(0xFF5D9FD6)
                   : Colors.white,
           border: Border.all(
-            color: filled || isDisabled
-                ? Colors.transparent
-                : const Color(0xFF9FB8C9),
+            color:
+                filled || isDisabled
+                    ? Colors.transparent
+                    : const Color(0xFFD6E2EC),
             width: 1.4,
           ),
         ),
         child: Icon(
           icon,
           size: 30,
-          color: isDisabled
-              ? const Color(0xFF8EA3B2)
-              : filled
+          color:
+              isDisabled
+                  ? const Color(0xFF90A1AE)
+                  : filled
                   ? Colors.white
-                  : const Color(0xFF557188),
+                  : const Color(0xFF476075),
         ),
       ),
     );
@@ -718,41 +972,33 @@ class WaterCup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: isFilled ? '채워진 물컵' : '비어있는 물컵',
+      label:
+          isFilled ? AppStrings.filledCupSemantic : AppStrings.emptyCupSemantic,
       child: InkWell(
         onTap: isDisabled ? null : onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: SizedBox(
+        borderRadius: BorderRadius.circular(28),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
           width: 58,
-          height: 94,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              Positioned(
-                left: 7,
-                right: 7,
-                bottom: 10,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOut,
-                  height: isFilled ? 50 : 0,
-                  decoration: BoxDecoration(
-                    color: isDisabled
-                        ? const Color(0xFF86C6F5)
-                        : const Color(0xFF4DA9F6),
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(12),
-                      top: Radius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _CupOutlinePainter(),
-                ),
-              ),
-            ],
+          height: 76,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(28)),
+          child: CustomPaint(
+            painter: _WaterDropPainter(
+              fillColor:
+                  isFilled
+                      ? isDisabled
+                          ? const Color(0xFF94D5F8)
+                          : const Color(0xFF77CFFF)
+                      : const Color(0xFFE2E6EA),
+              highlightColor:
+                  isFilled
+                      ? Colors.white.withValues(alpha: 0.52)
+                      : Colors.white.withValues(alpha: 0.40),
+              borderColor:
+                  isFilled ? const Color(0xFF5BB8F6) : const Color(0xFFD0D7DD),
+            ),
           ),
         ),
       ),
@@ -760,34 +1006,96 @@ class WaterCup extends StatelessWidget {
   }
 }
 
-class _CupOutlinePainter extends CustomPainter {
+class _WaterDropPainter extends CustomPainter {
+  const _WaterDropPainter({
+    required this.fillColor,
+    required this.highlightColor,
+    required this.borderColor,
+  });
+
+  final Color fillColor;
+  final Color highlightColor;
+  final Color borderColor;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final outlinePaint = Paint()
-      ..color = const Color(0xFF92A7B5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4;
+    final drop =
+        Path()
+          ..moveTo(size.width * 0.50, size.height * 0.03)
+          ..cubicTo(
+            size.width * 0.25,
+            size.height * 0.28,
+            size.width * 0.08,
+            size.height * 0.48,
+            size.width * 0.08,
+            size.height * 0.68,
+          )
+          ..cubicTo(
+            size.width * 0.08,
+            size.height * 0.90,
+            size.width * 0.26,
+            size.height * 0.98,
+            size.width * 0.50,
+            size.height * 0.98,
+          )
+          ..cubicTo(
+            size.width * 0.74,
+            size.height * 0.98,
+            size.width * 0.92,
+            size.height * 0.90,
+            size.width * 0.92,
+            size.height * 0.68,
+          )
+          ..cubicTo(
+            size.width * 0.92,
+            size.height * 0.48,
+            size.width * 0.75,
+            size.height * 0.28,
+            size.width * 0.50,
+            size.height * 0.03,
+          )
+          ..close();
 
-    final cupPath = Path()
-      ..moveTo(size.width * 0.20, size.height * 0.18)
-      ..lineTo(size.width * 0.80, size.height * 0.18)
-      ..lineTo(size.width * 0.70, size.height * 0.90)
-      ..quadraticBezierTo(
-        size.width * 0.50,
-        size.height * 0.98,
-        size.width * 0.30,
-        size.height * 0.90,
-      )
-      ..close();
+    canvas.drawPath(
+      drop,
+      Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      drop,
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
 
-    canvas.drawPath(cupPath, outlinePaint);
-    canvas.drawLine(
-      Offset(size.width * 0.14, size.height * 0.12),
-      Offset(size.width * 0.86, size.height * 0.12),
-      outlinePaint,
+    final highlight =
+        Path()
+          ..moveTo(size.width * 0.34, size.height * 0.34)
+          ..cubicTo(
+            size.width * 0.24,
+            size.height * 0.48,
+            size.width * 0.25,
+            size.height * 0.63,
+            size.width * 0.35,
+            size.height * 0.74,
+          );
+
+    canvas.drawPath(
+      highlight,
+      Paint()
+        ..color = highlightColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round,
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _WaterDropPainter oldDelegate) {
+    return oldDelegate.fillColor != fillColor ||
+        oldDelegate.highlightColor != highlightColor ||
+        oldDelegate.borderColor != borderColor;
+  }
 }
