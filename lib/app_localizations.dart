@@ -58,12 +58,6 @@ class AppLocalizations {
     _ => 'Nice',
   };
 
-  String get nextButton => switch (_languageCode) {
-    'ko' => '다음',
-    'ja' => '次へ',
-    _ => 'Next',
-  };
-
   String get goalTitle => switch (_languageCode) {
     'ko' => '오늘은 몇 잔을 목표로 할까요?',
     'ja' => '今日は何杯を目標にしますか？',
@@ -84,40 +78,10 @@ class AppLocalizations {
     _ => 'You can set up to 16 cups.',
   };
 
-  String get viewMonthlyRecordButton => switch (_languageCode) {
-    'ko' => '한 달 기록 보기',
-    'ja' => '1か月の記録を見る',
-    _ => 'View monthly record',
-  };
-
   String get startTrackingButton => switch (_languageCode) {
     'ko' => '물마시기',
     'ja' => '飲みはじめる',
     _ => 'Start drinking',
-  };
-
-  String get goToTodayTrackingButton => switch (_languageCode) {
-    'ko' => '오늘 물마시기 화면으로 가기',
-    'ja' => '今日の記録画面へ',
-    _ => 'Go to today\'s tracker',
-  };
-
-  String get calendarLegend => switch (_languageCode) {
-    'ko' => '파란 점: 완료 · 빨간 점: 미완료',
-    'ja' => '青い点: 完了 · 赤い点: 未完了',
-    _ => 'Blue dot: done · Red dot: missed',
-  };
-
-  String get goodPastMonthMessage => switch (_languageCode) {
-    'ko' => '이번 달은 물을 많이 마셨어요. 아주 잘했어요.',
-    'ja' => '今月はたくさん飲めました。とてもよくできました。',
-    _ => 'You drank plenty of water this month. Nicely done.',
-  };
-
-  String get badPastMonthMessage => switch (_languageCode) {
-    'ko' => '이번 달은 물을 덜 마셨어요. 다음 달에 다시 해봐요.',
-    'ja' => '今月は少なめでした。来月また頑張りましょう。',
-    _ => 'You drank a bit less this month. Try again next month.',
   };
 
   String get filledCupSemantic => switch (_languageCode) {
@@ -132,53 +96,11 @@ class AppLocalizations {
     _ => 'Empty water drop',
   };
 
-  String summaryGoal(int goalCups) => switch (_languageCode) {
-    'ko' => '오늘 목표는\n${goalCups}잔입니다.',
-    'ja' => '今日の目標は\n${goalCups}杯です。',
-    _ => 'Today\'s goal is\n$goalCups cups.',
-  };
-
-  String monthRecordTitle(DateTime month) => switch (_languageCode) {
-    'ko' => '${month.month}월 기록',
-    'ja' => '${month.month}月の記録',
-    _ => '${_monthName(month.month)} record',
-  };
-
-  String currentMonthHabitMessage(DateTime month) => switch (_languageCode) {
-    'ko' => '${month.month}월에는 물을 많이 마시는 습관을 들여요!',
-    'ja' => '${month.month}月はしっかり水を飲む習慣をつけましょう！',
-    _ => 'Build a better hydration habit in ${_monthName(month.month)}!',
-  };
-
   String trackerGoal(int goalCups) => switch (_languageCode) {
-    'ko' => '오늘 목표 ${goalCups}잔',
-    'ja' => '今日の目標 ${goalCups}杯',
+    'ko' => '오늘 목표 $goalCups잔',
+    'ja' => '今日の目標 $goalCups杯',
     _ => 'Today\'s goal: $goalCups cups',
   };
-
-  List<String> get weekdayLabels => switch (_languageCode) {
-    'ko' => const ['일', '월', '화', '수', '목', '금', '토'],
-    'ja' => const ['日', '月', '火', '水', '木', '金', '土'],
-    _ => const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  };
-
-  String _monthName(int month) {
-    const names = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return names[month - 1];
-  }
 }
 
 class _AppLocalizationsDelegate

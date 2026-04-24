@@ -106,17 +106,46 @@ class WaterDaysApp extends StatelessWidget {
     TextTheme baseTextTheme,
     AppLocalizations localizations,
   ) {
-    if (localizations.isKorean) {
-      return GoogleFonts.gaeguTextTheme(baseTextTheme);
+    final localized =
+        localizations.isKorean
+            ? GoogleFonts.gaeguTextTheme(baseTextTheme)
+            : localizations.isJapanese
+            ? GoogleFonts.yomogiTextTheme(baseTextTheme)
+            : GoogleFonts.cormorantGaramondTextTheme(baseTextTheme);
+
+    return _slightlyLargerTextTheme(localized);
+  }
+
+  TextTheme _slightlyLargerTextTheme(TextTheme textTheme) {
+    TextStyle? grow(TextStyle? style) {
+      final fontSize = style?.fontSize;
+      if (fontSize == null) {
+        return style;
+      }
+      return style?.copyWith(fontSize: fontSize * 1.05);
     }
-    if (localizations.isJapanese) {
-      return GoogleFonts.yomogiTextTheme(baseTextTheme);
-    }
-    return GoogleFonts.cormorantGaramondTextTheme(baseTextTheme);
+
+    return textTheme.copyWith(
+      displayLarge: grow(textTheme.displayLarge),
+      displayMedium: grow(textTheme.displayMedium),
+      displaySmall: grow(textTheme.displaySmall),
+      headlineLarge: grow(textTheme.headlineLarge),
+      headlineMedium: grow(textTheme.headlineMedium),
+      headlineSmall: grow(textTheme.headlineSmall),
+      titleLarge: grow(textTheme.titleLarge),
+      titleMedium: grow(textTheme.titleMedium),
+      titleSmall: grow(textTheme.titleSmall),
+      bodyLarge: grow(textTheme.bodyLarge),
+      bodyMedium: grow(textTheme.bodyMedium),
+      bodySmall: grow(textTheme.bodySmall),
+      labelLarge: grow(textTheme.labelLarge),
+      labelMedium: grow(textTheme.labelMedium),
+      labelSmall: grow(textTheme.labelSmall),
+    );
   }
 }
 
-enum FlowStep { goal, summary, calendar, tracker }
+enum FlowStep { goal, tracker }
 
 class _GoalLimitFormatter extends TextInputFormatter {
   @override
@@ -152,16 +181,11 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
   FlowStep _step = FlowStep.goal;
   int _goalCups = 8;
   List<bool> _cupStates = List<bool>.filled(8, false);
-  late DateTime _calendarMonth;
-  late final Map<DateTime, bool> _history;
   bool _completionShown = false;
 
   @override
   void initState() {
     super.initState();
-    final today = _dateOnly(DateTime.now());
-    _calendarMonth = DateTime(today.year, today.month);
-    _history = _seedHistory(today);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncWidget());
   }
 
@@ -171,13 +195,11 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     super.dispose();
   }
 
-  DateTime get _today => _dateOnly(DateTime.now());
-
   int get _drankCups => _cupStates.where((filled) => filled).length;
 
   bool get _isGoalComplete => _drankCups >= _goalCups;
 
-  void _goToSummaryStep() {
+  void _startTracking() {
     final parsed = int.tryParse(_goalController.text.trim());
     if (parsed == null || parsed <= 0 || parsed > 16) {
       return;
@@ -187,22 +209,9 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
       _goalCups = parsed;
       _cupStates = List<bool>.filled(_goalCups, false);
       _completionShown = false;
-      _history[_today] = false;
-      _step = FlowStep.summary;
-    });
-    _syncWidget();
-  }
-
-  void _startTracking() {
-    setState(() {
       _step = FlowStep.tracker;
     });
-  }
-
-  void _goToCalendar() {
-    setState(() {
-      _step = FlowStep.calendar;
-    });
+    _syncWidget();
   }
 
   void _incrementCup() {
@@ -233,7 +242,6 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
 
     setState(() {
       _cupStates[lastFilledIndex] = false;
-      _history[_today] = false;
     });
     _syncWidget();
   }
@@ -251,9 +259,6 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
 
   void _afterCupChange() {
     final completed = _isGoalComplete;
-    setState(() {
-      _history[_today] = completed;
-    });
     _syncWidget();
 
     if (completed && !_completionShown) {
@@ -295,55 +300,6 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     }
   }
 
-  void _showPreviousMonth() {
-    setState(() {
-      _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1);
-    });
-  }
-
-  void _showNextMonth() {
-    final currentMonth = DateTime(_today.year, _today.month);
-    final next = DateTime(_calendarMonth.year, _calendarMonth.month + 1);
-    if (next.isAfter(currentMonth)) {
-      return;
-    }
-
-    setState(() {
-      _calendarMonth = next;
-    });
-  }
-
-  Map<DateTime, bool> _seedHistory(DateTime today) {
-    final history = <DateTime, bool>{};
-
-    final currentMonthStart = DateTime(today.year, today.month, 1);
-    for (var day = 1; day < today.day; day++) {
-      final date = DateTime(today.year, today.month, day);
-      history[date] = day.isEven || day % 5 == 0;
-    }
-
-    final previousMonthStart = DateTime(today.year, today.month - 1, 1);
-    final previousMonthDays = DateUtils.getDaysInMonth(
-      previousMonthStart.year,
-      previousMonthStart.month,
-    );
-    for (var day = 1; day <= previousMonthDays; day++) {
-      final date = DateTime(
-        previousMonthStart.year,
-        previousMonthStart.month,
-        day,
-      );
-      history[date] = day % 3 != 0;
-    }
-
-    history[currentMonthStart] = true;
-    history[_dateOnly(today)] = false;
-    return history;
-  }
-
-  static DateTime _dateOnly(DateTime date) =>
-      DateTime(date.year, date.month, date.day);
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -368,27 +324,12 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
                 child: switch (_step) {
                   FlowStep.goal => _GoalStep(
                     controller: _goalController,
-                    onNext: _goToSummaryStep,
-                  ),
-                  FlowStep.summary => _SummaryStep(
-                    goalCups: _goalCups,
-                    onBack: () => setState(() => _step = FlowStep.goal),
-                    onCalendar: _goToCalendar,
-                    onStart: _startTracking,
-                  ),
-                  FlowStep.calendar => _CalendarStep(
-                    month: _calendarMonth,
-                    history: _history,
-                    today: _today,
-                    onBack: () => setState(() => _step = FlowStep.summary),
-                    onPreviousMonth: _showPreviousMonth,
-                    onNextMonth: _showNextMonth,
                     onStart: _startTracking,
                   ),
                   FlowStep.tracker => _TrackerStep(
                     goalCups: _goalCups,
                     cupStates: _cupStates,
-                    onBack: () => setState(() => _step = FlowStep.summary),
+                    onBack: () => setState(() => _step = FlowStep.goal),
                     onCupTap: _toggleCup,
                     isGoalComplete: _isGoalComplete,
                     onIncrement: _incrementCup,
@@ -431,10 +372,10 @@ class _AmbientDrop extends StatelessWidget {
 }
 
 class _GoalStep extends StatelessWidget {
-  const _GoalStep({required this.controller, required this.onNext});
+  const _GoalStep({required this.controller, required this.onStart});
 
   final TextEditingController controller;
-  final VoidCallback onNext;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -476,54 +417,7 @@ class _GoalStep extends StatelessWidget {
               ).textTheme.bodySmall?.copyWith(color: const Color(0xFF7A8E9F)),
             ),
             const SizedBox(height: 18),
-            _PrimaryActionButton(label: l10n.nextButton, onTap: onNext),
-          ],
-        ),
-        const Spacer(),
-      ],
-    );
-  }
-}
-
-class _SummaryStep extends StatelessWidget {
-  const _SummaryStep({
-    required this.goalCups,
-    required this.onBack,
-    required this.onCalendar,
-    required this.onStart,
-  });
-
-  final int goalCups;
-  final VoidCallback onBack;
-  final VoidCallback onCalendar;
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Header(showBack: true, onBack: onBack),
-        const Spacer(),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.summaryGoal(goalCups),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 32),
             _PrimaryActionButton(
-              label: l10n.viewMonthlyRecordButton,
-              onTap: onCalendar,
-            ),
-            const SizedBox(height: 10),
-            _SecondaryActionButton(
               label: l10n.startTrackingButton,
               onTap: onStart,
             ),
@@ -531,251 +425,6 @@ class _SummaryStep extends StatelessWidget {
         ),
         const Spacer(),
       ],
-    );
-  }
-}
-
-class _CalendarStep extends StatelessWidget {
-  const _CalendarStep({
-    required this.month,
-    required this.history,
-    required this.today,
-    required this.onBack,
-    required this.onPreviousMonth,
-    required this.onNextMonth,
-    required this.onStart,
-  });
-
-  final DateTime month;
-  final Map<DateTime, bool> history;
-  final DateTime today;
-  final VoidCallback onBack;
-  final VoidCallback onPreviousMonth;
-  final VoidCallback onNextMonth;
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final firstDay = DateTime(month.year, month.month, 1);
-    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
-    final leadingEmpty = firstDay.weekday % 7;
-    final labels = l10n.weekdayLabels;
-    final stats = _monthStats(month, history, today);
-    final message = _monthMessage(l10n, month, stats, today);
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Header(showBack: true, onBack: onBack),
-          const SizedBox(height: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    l10n.monthRecordTitle(month),
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: onPreviousMonth,
-                    icon: const Icon(Icons.chevron_left_rounded),
-                  ),
-                  IconButton(
-                    onPressed:
-                        DateTime(month.year, month.month) ==
-                                DateTime(today.year, today.month)
-                            ? null
-                            : onNextMonth,
-                    icon: const Icon(Icons.chevron_right_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children:
-                    labels.map((label) {
-                      return Expanded(
-                        child: Center(
-                          child: Text(
-                            label,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: const Color(0xFF6D8295)),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-              ),
-              const SizedBox(height: 14),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 0.76,
-                ),
-                itemCount: leadingEmpty + daysInMonth,
-                itemBuilder: (context, index) {
-                  if (index < leadingEmpty) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final day = index - leadingEmpty + 1;
-                  final date = DateTime(month.year, month.month, day);
-                  final status = _statusForDate(date, history, today);
-                  return _CalendarDay(
-                    day: day,
-                    isToday: DateUtils.isSameDay(date, today),
-                    status: status,
-                  );
-                },
-              ),
-              const SizedBox(height: 18),
-              Text(
-                l10n.calendarLegend,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6C8496),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                message,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 18),
-              _PrimaryActionButton(
-                label: l10n.goToTodayTrackingButton,
-                onTap: onStart,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static _DayStatus _statusForDate(
-    DateTime date,
-    Map<DateTime, bool> history,
-    DateTime today,
-  ) {
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final state = history[normalizedDate];
-
-    if (state == true) {
-      return _DayStatus.complete;
-    }
-    if (state == false && !normalizedDate.isAfter(normalizedToday)) {
-      return _DayStatus.incomplete;
-    }
-    return _DayStatus.none;
-  }
-
-  static ({int completed, int incomplete}) _monthStats(
-    DateTime month,
-    Map<DateTime, bool> history,
-    DateTime today,
-  ) {
-    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
-    var completed = 0;
-    var incomplete = 0;
-
-    for (var day = 1; day <= daysInMonth; day++) {
-      final date = DateTime(month.year, month.month, day);
-      switch (_statusForDate(date, history, today)) {
-        case _DayStatus.complete:
-          completed += 1;
-        case _DayStatus.incomplete:
-          incomplete += 1;
-        case _DayStatus.none:
-          break;
-      }
-    }
-    return (completed: completed, incomplete: incomplete);
-  }
-
-  static String _monthMessage(
-    AppLocalizations l10n,
-    DateTime month,
-    ({int completed, int incomplete}) stats,
-    DateTime today,
-  ) {
-    final currentMonth = DateTime(today.year, today.month);
-    final viewedMonth = DateTime(month.year, month.month);
-
-    if (viewedMonth == currentMonth) {
-      return l10n.currentMonthHabitMessage(month);
-    }
-
-    if (stats.completed > stats.incomplete) {
-      return l10n.goodPastMonthMessage;
-    }
-
-    return l10n.badPastMonthMessage;
-  }
-}
-
-enum _DayStatus { none, complete, incomplete }
-
-class _CalendarDay extends StatelessWidget {
-  const _CalendarDay({
-    required this.day,
-    required this.isToday,
-    required this.status,
-  });
-
-  final int day;
-  final bool isToday;
-  final _DayStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    Color? dotColor;
-    if (status == _DayStatus.complete) {
-      dotColor = const Color(0xFF3C98F4);
-    } else if (status == _DayStatus.incomplete) {
-      dotColor = const Color(0xFFFF6C78);
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isToday ? const Color(0xFF90BEDF) : const Color(0xFFD9E4EC),
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            '$day',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: dotColor ?? Colors.transparent,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -925,32 +574,6 @@ class _PrimaryActionButton extends StatelessWidget {
           backgroundColor: const Color(0xFF5D9FD6),
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-}
-
-class _SecondaryActionButton extends StatelessWidget {
-  const _SecondaryActionButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF34516A),
-          side: const BorderSide(color: Color(0xFFD6E2EC)),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
