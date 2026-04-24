@@ -53,4 +53,42 @@ void main() {
     await tester.tap(find.text(l10n.completionDialogAction));
     await tester.pump(const Duration(milliseconds: 350));
   });
+
+  testWidgets('completed tracker can be adjusted and completed again', (
+    WidgetTester tester,
+  ) async {
+    final l10n = AppLocalizations(const Locale('en'));
+
+    await tester.pumpWidget(const WaterDaysApp(locale: Locale('en')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '2');
+    await tester.tap(find.text(l10n.startTrackingButton));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    await tester.tap(find.byType(WaterCup).at(0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.byType(WaterCup).at(1));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+
+    expect(find.text(l10n.completionDialogTitle), findsOneWidget);
+    await tester.tap(find.text(l10n.completionDialogAction));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    await tester.tap(find.byType(WaterCup).at(1));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(tester.widget<WaterCup>(find.byType(WaterCup).at(0)).isFilled, isTrue);
+    expect(
+      tester.widget<WaterCup>(find.byType(WaterCup).at(1)).isFilled,
+      isFalse,
+    );
+
+    await tester.tap(find.byType(WaterCup).at(1));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+
+    expect(find.text(l10n.completionDialogTitle), findsOneWidget);
+  });
 }

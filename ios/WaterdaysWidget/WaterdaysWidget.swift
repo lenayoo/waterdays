@@ -45,17 +45,13 @@ private struct WidgetCopy {
   }
 
   var configurationDisplayName: String {
-    switch languageCode {
-    case "ko": return "워터 데이즈"
-    case "ja": return "ウォーターデイズ"
-    default: return "Water Days"
-    }
+    "Water Days"
   }
 
   var configurationDescription: String {
     switch languageCode {
-    case "ko": return "오늘 마신 물의 양과 목표를 바로 확인합니다."
-    case "ja": return "今日の水分量と目標をすぐ確認できます。"
+    case "ko": return "오늘 물 섭취 상태를 한눈에 확인합니다."
+    case "ja": return "今日の水分状況をひと目で確認できます。"
     default: return "Check today's water progress and goal at a glance."
     }
   }
@@ -124,6 +120,13 @@ struct WaterdaysWidgetEntryView: View {
     "\(entry.drankCups)/\(entry.goalCups)"
   }
 
+  private var accessoryStatusText: String {
+    if entry.drankCups > 0 && !isGoalComplete {
+      return "Hydrated 💧"
+    }
+    return statusText
+  }
+
   var body: some View {
     Group {
       switch family {
@@ -147,19 +150,21 @@ struct WaterdaysWidgetEntryView: View {
   }
 
   private var accessoryRectangularView: some View {
-    VStack(alignment: .leading, spacing: 7) {
-      Text(statusText)
-        .font(.system(size: 14, weight: .semibold, design: .rounded))
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+    accessoryChrome {
+      VStack(alignment: .leading, spacing: 7) {
+        Text(accessoryStatusText)
+          .font(.system(size: 14, weight: .semibold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
 
-      Text(progressValueText)
-        .font(.system(size: 14, weight: .bold, design: .rounded))
+        Text(progressValueText)
+          .font(.system(size: 14, weight: .bold, design: .rounded))
 
-      accessoryProgressBar(height: 8)
+        accessoryProgressBar(height: 8)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .foregroundColor(WidgetPalette.textPrimary)
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .foregroundColor(WidgetPalette.textPrimary)
   }
 
   @ViewBuilder
@@ -178,6 +183,20 @@ struct WaterdaysWidgetEntryView: View {
         content()
           .padding(contentPadding)
       }
+    }
+  }
+
+  @ViewBuilder
+  private func accessoryChrome<Content: View>(
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    if #available(iOSApplicationExtension 17.0, *) {
+      content()
+        .containerBackground(for: .widget) {
+          Color.clear
+        }
+    } else {
+      content()
     }
   }
 
@@ -224,7 +243,7 @@ struct WaterdaysWidgetEntryView: View {
   }
 
   private var smallHomeWidgetView: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 0) {
       Spacer()
         .frame(height: 8)
 
@@ -232,29 +251,34 @@ struct WaterdaysWidgetEntryView: View {
 
       Spacer(minLength: 0)
 
-      HStack(alignment: .firstTextBaseline, spacing: 4) {
-        Text("\(entry.drankCups)")
-          .font(.system(size: 38, weight: .bold, design: .rounded))
-          .foregroundColor(WidgetPalette.textPrimary)
-        Text("/\(entry.goalCups)")
-          .font(.system(size: 20, weight: .semibold, design: .rounded))
-          .foregroundColor(WidgetPalette.textSecondary)
-      }
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+          Text("\(entry.drankCups)")
+            .font(.system(size: 38, weight: .bold, design: .rounded))
+            .foregroundColor(WidgetPalette.textPrimary)
+          Text("/\(entry.goalCups)")
+            .font(.system(size: 20, weight: .semibold, design: .rounded))
+            .foregroundColor(WidgetPalette.textSecondary)
+        }
 
-      progressBar(height: 12)
+        progressBar(height: 12)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Spacer(minLength: 0)
     }
   }
 
   private var mediumHomeWidgetView: some View {
-    HStack(spacing: 20) {
-      VStack(alignment: .leading, spacing: 14) {
-        Spacer()
-          .frame(height: 10)
+    VStack(alignment: .leading, spacing: 0) {
+      Spacer()
+        .frame(height: 10)
 
-        widgetHeader
+      widgetHeader
 
-        Spacer(minLength: 0)
+      Spacer(minLength: 0)
 
+      HStack(alignment: .center, spacing: 20) {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
           Text("\(entry.drankCups)")
             .font(.system(size: 48, weight: .bold, design: .rounded))
@@ -263,15 +287,13 @@ struct WaterdaysWidgetEntryView: View {
             .font(.system(size: 24, weight: .semibold, design: .rounded))
             .foregroundColor(WidgetPalette.textSecondary)
         }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-      VStack {
-        Spacer(minLength: 0)
         progressBar(height: 14)
-        Spacer(minLength: 0)
+          .frame(width: 120)
       }
-      .frame(width: 120, alignment: .center)
+
+      Spacer(minLength: 0)
     }
   }
 

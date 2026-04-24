@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
-class AppStrings {
+class AppConfig {
+  const AppConfig._();
+
+  static const appName = 'Water Days';
   static const channelName = 'waterdays/widget';
+  static const defaultGoalCups = 8;
+  static const maxGoalCups = 16;
 }
 
 class AppLocalizations {
@@ -10,6 +15,7 @@ class AppLocalizations {
   final Locale locale;
 
   static const supportedLocales = [Locale('ko'), Locale('en'), Locale('ja')];
+  static const delegate = _AppLocalizationsDelegate();
 
   static AppLocalizations of(BuildContext context) {
     final localization = Localizations.of<AppLocalizations>(
@@ -20,87 +26,92 @@ class AppLocalizations {
     return localization!;
   }
 
-  static const delegate = _AppLocalizationsDelegate();
-
-  String get _languageCode {
+  String get languageCode {
     final code = locale.languageCode.toLowerCase();
-    if (code == 'ja' || code == 'ko') {
+    if (code == 'ko' || code == 'ja') {
       return code;
     }
     return 'en';
   }
 
-  bool get isKorean => _languageCode == 'ko';
-  bool get isJapanese => _languageCode == 'ja';
+  bool get isKorean => languageCode == 'ko';
+  bool get isJapanese => languageCode == 'ja';
 
-  String get appTitle => switch (_languageCode) {
-    'ko' => '워터 데이즈',
-    'ja' => 'ウォーターデイズ',
-    _ => 'Water Days',
-  };
+  String text({
+    required String en,
+    String? ko,
+    String? ja,
+  }) {
+    return switch (languageCode) {
+      'ko' => ko ?? en,
+      'ja' => ja ?? en,
+      _ => en,
+    };
+  }
 
-  String get completionDialogTitle => switch (_languageCode) {
-    'ko' => '목표 완료!',
-    'ja' => '目標達成！',
-    _ => 'Goal complete!',
-  };
+  String get appTitle => AppConfig.appName;
 
-  String get completionDialogContent => switch (_languageCode) {
-    'ko' => '오늘은 목표를 완료했어요!\n수분 루틴을 잘 지켰네요.',
-    'ja' => '今日は目標を達成しました！\n水分ルーティンをしっかり守れましたね。',
-    _ =>
-      'You reached your goal today!\nYour hydration routine stayed on track.',
-  };
+  String get completionDialogTitle => text(
+    en: 'Goal complete',
+    ko: '목표 달성',
+    ja: '目標達成',
+  );
 
-  String get completionDialogAction => switch (_languageCode) {
-    'ko' => '좋아요',
-    'ja' => 'いいね',
-    _ => 'Nice',
-  };
+  String get completionDialogContent => text(
+    en: 'You finished today\'s goal.\nNice and steady.',
+    ko: '오늘 목표를 채웠어요.\n수분 섭취를 잘 챙겼네요.',
+    ja: '今日の目標を達成しました。\n水分補給をしっかり続けられました。',
+  );
 
-  String get goalTitle => switch (_languageCode) {
-    'ko' => '오늘은 몇 잔을 목표로 할까요?',
-    'ja' => '今日は何杯を目標にしますか？',
-    _ => 'How many cups is your goal today?',
-  };
+  String get completionDialogAction => text(
+    en: 'Nice',
+    ko: '좋아요',
+    ja: 'いいね',
+  );
 
-  String get goalHint => '1~16';
+  String get goalTitle => text(
+    en: 'How many cups is your goal today?',
+    ko: '오늘 목표는 몇 잔인가요?',
+    ja: '今日の目標は何杯ですか？',
+  );
 
-  String get goalSuffix => switch (_languageCode) {
-    'ko' => '잔',
-    'ja' => '杯',
-    _ => 'cups',
-  };
+  String get goalHint => '1-${AppConfig.maxGoalCups}';
 
-  String get goalHelper => switch (_languageCode) {
-    'ko' => '최대 16잔까지 설정할 수 있어요.',
-    'ja' => '最大16杯まで設定できます。',
-    _ => 'You can set up to 16 cups.',
-  };
+  String get goalSuffix => text(
+    en: 'cups',
+    ko: '잔',
+    ja: '杯',
+  );
 
-  String get startTrackingButton => switch (_languageCode) {
-    'ko' => '물마시기',
-    'ja' => '飲みはじめる',
-    _ => 'Start drinking',
-  };
+  String get goalHelper => text(
+    en: 'Set up to ${AppConfig.maxGoalCups} cups.',
+    ko: '최대 ${AppConfig.maxGoalCups}잔까지 설정할 수 있어요.',
+    ja: '最大${AppConfig.maxGoalCups}杯まで設定できます。',
+  );
 
-  String get filledCupSemantic => switch (_languageCode) {
-    'ko' => '채워진 물방울',
-    'ja' => '満たされたしずく',
-    _ => 'Filled water drop',
-  };
+  String get startTrackingButton => text(
+    en: 'Start drinking',
+    ko: '기록 시작',
+    ja: '記録を始める',
+  );
 
-  String get emptyCupSemantic => switch (_languageCode) {
-    'ko' => '비어있는 물방울',
-    'ja' => '空のしずく',
-    _ => 'Empty water drop',
-  };
+  String get filledCupSemantic => text(
+    en: 'Filled water drop',
+    ko: '채워진 물방울',
+    ja: '満たされた水滴',
+  );
 
-  String trackerGoal(int goalCups) => switch (_languageCode) {
-    'ko' => '오늘 목표 $goalCups잔',
-    'ja' => '今日の目標 $goalCups杯',
-    _ => 'Today\'s goal: $goalCups cups',
-  };
+  String get emptyCupSemantic => text(
+    en: 'Empty water drop',
+    ko: '비어 있는 물방울',
+    ja: '空の水滴',
+  );
+
+  String trackerGoal(int goalCups) => text(
+    en: 'Today\'s goal: $goalCups cups',
+    ko: '오늘 목표 $goalCups잔',
+    ja: '今日の目標 $goalCups杯',
+  );
 }
 
 class _AppLocalizationsDelegate
