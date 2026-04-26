@@ -108,23 +108,16 @@ struct WaterdaysWidgetEntryView: View {
 
   private var statusText: String {
     if isGoalComplete {
-      return "You did it"
+      return "Completed♥️"
     }
     if entry.drankCups == 0 {
-      return "Drink water"
+      return "Drink water!"
     }
-    return "Hydrated"
+    return "Hydrated...💧"
   }
 
   private var progressValueText: String {
     "\(entry.drankCups)/\(entry.goalCups)"
-  }
-
-  private var accessoryStatusText: String {
-    if entry.drankCups > 0 && !isGoalComplete {
-      return "Hydrated 💧"
-    }
-    return statusText
   }
 
   var body: some View {
@@ -152,7 +145,7 @@ struct WaterdaysWidgetEntryView: View {
   private var accessoryRectangularView: some View {
     accessoryChrome {
       VStack(alignment: .leading, spacing: 7) {
-        Text(accessoryStatusText)
+        Text(statusText)
           .font(.system(size: 14, weight: .semibold, design: .rounded))
           .lineLimit(1)
           .minimumScaleFactor(0.8)
@@ -302,7 +295,7 @@ struct WaterdaysWidgetEntryView: View {
       Image(systemName: "drop.fill")
         .font(.system(size: 12, weight: .semibold))
         .foregroundColor(WidgetPalette.accent)
-      Text("Water Days")
+      Text(statusText)
         .font(.system(size: 13, weight: .semibold, design: .rounded))
         .foregroundColor(WidgetPalette.textSecondary)
         .lineLimit(1)

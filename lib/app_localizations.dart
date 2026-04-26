@@ -34,9 +34,6 @@ class AppLocalizations {
     return 'en';
   }
 
-  bool get isKorean => languageCode == 'ko';
-  bool get isJapanese => languageCode == 'ja';
-
   String text({
     required String en,
     String? ko,

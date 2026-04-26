@@ -346,6 +346,7 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
                   ),
                   FlowStep.tracker => _TrackerStep(
                     goalCups: _goalCups,
+                    drankCups: _drankCups,
                     cupStates: _cupStates,
                     onBack: () => setState(() => _step = FlowStep.goal),
                     onCupTap: _toggleCup,
@@ -447,6 +448,7 @@ class _GoalStep extends StatelessWidget {
 class _TrackerStep extends StatelessWidget {
   const _TrackerStep({
     required this.goalCups,
+    required this.drankCups,
     required this.cupStates,
     required this.onBack,
     required this.onCupTap,
@@ -455,6 +457,7 @@ class _TrackerStep extends StatelessWidget {
   });
 
   final int goalCups;
+  final int drankCups;
   final List<bool> cupStates;
   final VoidCallback onBack;
   final ValueChanged<int> onCupTap;
@@ -464,7 +467,6 @@ class _TrackerStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final drankCups = cupStates.where((filled) => filled).length;
     final canIncrement = drankCups < goalCups;
     final canDecrement = drankCups > 0;
 
