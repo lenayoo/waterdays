@@ -24,6 +24,7 @@ class SharedPrefsWaterStateStore implements WaterStateStore {
       'hasStartedTracking': prefs.getBool(_Keys.hasStartedTracking),
       'goalCups': prefs.getInt(_Keys.goalCups),
       'drankCups': prefs.getInt(_Keys.drankCups),
+      'filledCupIndicesJson': prefs.getString(_Keys.filledCupIndicesJson),
       'currentDateKey': prefs.getString(_Keys.currentDateKey),
       'historyJson': prefs.getString(_Keys.historyJson),
     });
@@ -40,6 +41,10 @@ class SharedPrefsWaterStateStore implements WaterStateStore {
     );
     await prefs.setInt(_Keys.goalCups, data['goalCups']! as int);
     await prefs.setInt(_Keys.drankCups, data['drankCups']! as int);
+    await prefs.setString(
+      _Keys.filledCupIndicesJson,
+      data['filledCupIndicesJson']! as String,
+    );
     await prefs.setString(
       _Keys.currentDateKey,
       data['currentDateKey']! as String,
@@ -108,6 +113,7 @@ class _Keys {
   static const hasStartedTracking = 'waterdays.hasStartedTracking';
   static const goalCups = 'waterdays.goalCups';
   static const drankCups = 'waterdays.drankCups';
+  static const filledCupIndicesJson = 'waterdays.filledCupIndicesJson';
   static const currentDateKey = 'waterdays.currentDateKey';
   static const historyJson = 'waterdays.historyJson';
 }

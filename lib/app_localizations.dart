@@ -45,18 +45,27 @@ class AppLocalizations {
   String get appTitle => AppConfig.appName;
 
   String get completionDialogTitle =>
-      text(en: 'You did it', ko: '해냈어요', ja: 'できました');
+      text(en: 'Congratulations!!', ko: '축하해요!!', ja: 'おめでとう!!');
 
   String get completionDialogContent => text(
-    en: 'Today\'s goal is complete.',
-    ko: '오늘 목표를 채웠어요.',
-    ja: '今日の目標を達成しました。',
+    en: 'You finished all your water today.',
+    ko: '오늘의 물을 다 마셨어요.',
+    ja: '今日の水を全部飲めました。',
   );
 
-  String get completionDialogAction => text(en: 'Nice', ko: '좋아요', ja: 'いいね');
+  String get completionDialogAction => text(en: 'Yay', ko: '좋아요', ja: 'やった');
 
-  String get goalTitle =>
-      text(en: 'How many cups today?', ko: '오늘은 몇 잔 마실까요?', ja: '今日は何杯飲みますか？');
+  String get goalTitle => text(
+    en: 'Set your daily water goal',
+    ko: '하루에 마실 물 잔 수를 정해 주세요',
+    ja: '1日に飲む水の杯数を決めてください',
+  );
+
+  String get editGoalTitle => text(
+    en: 'Update your daily water goal',
+    ko: '하루 물 목표를 수정해 주세요',
+    ja: '1日の水の目標を変更してください',
+  );
 
   String get goalHint => '1-${AppConfig.maxGoalCups}';
 
@@ -68,8 +77,9 @@ class AppLocalizations {
     ja: '最大${AppConfig.maxGoalCups}杯まで選べます。',
   );
 
-  String get startTrackingButton =>
-      text(en: 'Start drinking', ko: '기록 시작', ja: '記録を始める');
+  String get startTrackingButton => text(en: 'Start', ko: '시작하기', ja: 'はじめる');
+
+  String get saveGoalButton => text(en: 'Save', ko: '저장하기', ja: '保存');
 
   String get filledCupSemantic =>
       text(en: 'Filled water drop', ko: '채워진 물방울', ja: '満たされた水滴');
@@ -97,7 +107,7 @@ class AppLocalizations {
       text(en: 'Drink water', ko: '물 마셔요', ja: '水を飲もう');
 
   String get trackerStatusHydrated =>
-      text(en: 'Hydrated', ko: '잘 마시고 있어요', ja: '좋은 흐름');
+      text(en: 'Hydrated', ko: '잘 마시고 있어요', ja: '順調です');
 
   String get trackerStatusDone =>
       text(en: 'You did it', ko: '해냈어요', ja: 'できました');
@@ -109,7 +119,10 @@ class AppLocalizations {
   );
 
   String get monthlyRecordButtonLabel =>
-      text(en: 'Monthly record', ko: '월 기록', ja: '月の記録');
+      text(en: 'Calendar', ko: '달력', ja: 'カレンダー');
+
+  String get editGoalButtonLabel =>
+      text(en: 'Edit goal', ko: '목표 수정', ja: '目標を変更');
 
   String get monthlyRecordTitle =>
       text(en: 'Monthly record', ko: '월 기록', ja: '月の記録');

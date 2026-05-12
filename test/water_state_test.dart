@@ -6,7 +6,7 @@ void main() {
     final state = WaterTrackerState.initial(DateTime(2026, 5, 12)).copyWith(
       hasStartedTracking: true,
       goalCups: 8,
-      drankCups: 5,
+      filledCupIndices: const [0, 1, 2, 3, 4],
       currentDateKey: '2026-05-12',
     );
 
@@ -22,7 +22,7 @@ void main() {
     final state = WaterTrackerState.initial(DateTime(2026, 5, 12)).copyWith(
       hasStartedTracking: true,
       goalCups: 8,
-      drankCups: 6,
+      filledCupIndices: const [0, 1, 2, 3, 4, 5],
       currentDateKey: '2026-05-12',
     );
 
@@ -32,5 +32,33 @@ void main() {
     expect(nextState.history['2026-05-12']?.drankCups, 6);
     expect(nextState.history['2026-05-13']?.drankCups, 0);
     expect(nextState.history['2026-05-14']?.drankCups, 0);
+  });
+
+  test('random cup tap only toggles the tapped cup', () {
+    final state = WaterTrackerState.initial(DateTime(2026, 5, 12)).copyWith(
+      hasStartedTracking: true,
+      goalCups: 6,
+      filledCupIndices: const [1, 4],
+      currentDateKey: '2026-05-12',
+    );
+
+    final nextState = state.toggleCup(3);
+
+    expect(nextState.filledCupIndices, [1, 3, 4]);
+    expect(nextState.cupStates, [false, true, false, true, true, false]);
+  });
+
+  test('decrement removes the last filled cup first', () {
+    final state = WaterTrackerState.initial(DateTime(2026, 5, 12)).copyWith(
+      hasStartedTracking: true,
+      goalCups: 6,
+      filledCupIndices: const [0, 2, 5],
+      currentDateKey: '2026-05-12',
+    );
+
+    final nextState = state.decrementCup();
+
+    expect(nextState.filledCupIndices, [0, 2]);
+    expect(nextState.cupStates, [true, false, true, false, false, false]);
   });
 }

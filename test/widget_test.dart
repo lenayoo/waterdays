@@ -29,10 +29,11 @@ void main() {
     await tester.enterText(goalField, '6');
     expect(find.text(l10n.startTrackingButton), findsOneWidget);
     await tester.tap(find.text(l10n.startTrackingButton));
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
 
     expect(find.text(l10n.trackerGoal(6)), findsOneWidget);
     expect(find.byType(WaterCup), findsNWidgets(6));
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
   });
 
   testWidgets('tracker shows cups and completion dialog', (
@@ -52,7 +53,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '6');
     await tester.tap(find.text(l10n.startTrackingButton));
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
 
     expect(find.text(l10n.trackerGoal(6)), findsOneWidget);
     expect(find.byType(WaterCup), findsNWidgets(6));
@@ -63,14 +64,85 @@ void main() {
     }
     await tester.pump();
 
-    expect(find.text(l10n.completionDialogContent), findsOneWidget);
+    expect(find.text(l10n.completionDialogContent), findsWidgets);
     expect(find.text(l10n.completionDialogAction), findsOneWidget);
 
     await tester.tap(find.text(l10n.completionDialogAction));
     await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      find.byKey(const ValueKey('trackerCelebrationEmoji')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.add), findsNothing);
+    expect(find.byIcon(Icons.remove), findsNothing);
   });
 
-  testWidgets('completed tracker can be adjusted and completed again', (
+  testWidgets(
+    'random cup taps fill only that cup and minus clears from the end',
+    (WidgetTester tester) async {
+      final l10n = AppLocalizations(const Locale('en'));
+      final store = MemoryWaterStateStore();
+
+      await tester.pumpWidget(
+        WaterDaysApp(
+          locale: const Locale('en'),
+          stateStore: store,
+          reminderService: NoopWaterReminderService(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '6');
+      await tester.tap(find.text(l10n.startTrackingButton));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(WaterCup).at(4));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.tap(find.byType(WaterCup).at(1));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(0)).isFilled,
+        isFalse,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(1)).isFilled,
+        isTrue,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(2)).isFilled,
+        isFalse,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(3)).isFilled,
+        isFalse,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(4)).isFilled,
+        isTrue,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(5)).isFilled,
+        isFalse,
+      );
+
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(1)).isFilled,
+        isTrue,
+      );
+      expect(
+        tester.widget<WaterCup>(find.byType(WaterCup).at(4)).isFilled,
+        isFalse,
+      );
+      expect(find.text('1 / 6'), findsOneWidget);
+    },
+  );
+
+  testWidgets('app reopens into tracker and goal can be edited from header', (
     WidgetTester tester,
   ) async {
     final l10n = AppLocalizations(const Locale('en'));
@@ -87,35 +159,33 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '2');
     await tester.tap(find.text(l10n.startTrackingButton));
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(WaterCup).at(0));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.tap(find.byType(WaterCup).at(1));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pump();
+    expect(find.text(l10n.trackerGoal(2)), findsOneWidget);
+    expect(find.text(l10n.startTrackingButton), findsNothing);
 
-    expect(find.text(l10n.completionDialogContent), findsOneWidget);
-    await tester.tap(find.text(l10n.completionDialogAction));
-    await tester.pump(const Duration(milliseconds: 350));
-
-    await tester.tap(find.byType(WaterCup).at(1));
-    await tester.pump(const Duration(milliseconds: 350));
-
-    expect(
-      tester.widget<WaterCup>(find.byType(WaterCup).at(0)).isFilled,
-      isTrue,
+    await tester.pumpWidget(
+      WaterDaysApp(
+        locale: const Locale('en'),
+        stateStore: store,
+        reminderService: NoopWaterReminderService(),
+      ),
     );
-    expect(
-      tester.widget<WaterCup>(find.byType(WaterCup).at(1)).isFilled,
-      isFalse,
-    );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(WaterCup).at(1));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pump();
+    expect(find.text(l10n.trackerGoal(2)), findsOneWidget);
+    expect(find.text(l10n.startTrackingButton), findsNothing);
 
-    expect(find.text(l10n.completionDialogContent), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.edit_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.editGoalTitle), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '4');
+    await tester.tap(find.text(l10n.saveGoalButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.trackerGoal(4)), findsOneWidget);
+    expect(find.byType(WaterCup), findsNWidgets(4));
   });
 
   testWidgets('monthly history sheet opens on small screens without overflow', (
@@ -139,6 +209,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.calendar_month_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.monthlyRecordTitle), findsOneWidget);
+    expect(find.text(l10n.monthlyRecordTitle), findsNothing);
+    expect(find.text(l10n.calendarEmptyTitle), findsOneWidget);
   });
 }

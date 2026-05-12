@@ -214,6 +214,7 @@ class _WaterFlowPageState extends State<WaterFlowPage>
   WaterTrackerState _trackerState = WaterTrackerState.initial();
   FlowStep _step = FlowStep.goal;
   bool _completionShown = false;
+  bool _isEditingGoal = false;
   bool _isLoading = true;
   bool _isRestoring = false;
 
@@ -266,6 +267,7 @@ class _WaterFlowPageState extends State<WaterFlowPage>
       _step = nextState.hasStartedTracking ? FlowStep.tracker : FlowStep.goal;
       _goalController.text = '${nextState.goalCups}';
       _completionShown = nextState.isGoalComplete;
+      _isEditingGoal = false;
       _isLoading = false;
     });
 
@@ -285,6 +287,8 @@ class _WaterFlowPageState extends State<WaterFlowPage>
     WaterTrackerState nextState, {
     FlowStep? nextStep,
     bool requestPermissions = false,
+    bool showCompletionDialog = true,
+    bool closeGoalEditor = false,
   }) async {
     final wasComplete = _trackerState.isGoalComplete;
 
@@ -298,6 +302,11 @@ class _WaterFlowPageState extends State<WaterFlowPage>
       _goalController.text = '${nextState.goalCups}';
       if (!nextState.isGoalComplete) {
         _completionShown = false;
+      } else if (!showCompletionDialog) {
+        _completionShown = true;
+      }
+      if (closeGoalEditor) {
+        _isEditingGoal = false;
       }
     });
 
@@ -315,7 +324,10 @@ class _WaterFlowPageState extends State<WaterFlowPage>
       unawaited(widget.reminderService.requestPermissions());
     }
 
-    if (!wasComplete && nextState.isGoalComplete && !_completionShown) {
+    if (showCompletionDialog &&
+        !wasComplete &&
+        nextState.isGoalComplete &&
+        !_completionShown) {
       _completionShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -325,19 +337,26 @@ class _WaterFlowPageState extends State<WaterFlowPage>
     }
   }
 
-  void _startTracking() {
+  void _saveGoal() {
     final parsed = int.tryParse(_goalController.text.trim());
     if (parsed == null || parsed <= 0 || parsed > AppConfig.maxGoalCups) {
       return;
     }
 
-    final nextState = _trackerState
-        .normalizeForDate(DateTime.now())
-        .startTracking(parsed, now: DateTime.now());
+    final now = DateTime.now();
+    final normalizedState = _trackerState.normalizeForDate(now);
+    final isEditingGoal = _isEditingGoal && normalizedState.hasStartedTracking;
+    final nextState =
+        isEditingGoal
+            ? normalizedState.updateGoal(parsed, now: now)
+            : normalizedState.startTracking(parsed, now: now);
+
     _updateState(
       nextState,
       nextStep: FlowStep.tracker,
-      requestPermissions: true,
+      requestPermissions: !isEditingGoal,
+      showCompletionDialog: !isEditingGoal,
+      closeGoalEditor: true,
     );
   }
 
@@ -356,7 +375,18 @@ class _WaterFlowPageState extends State<WaterFlowPage>
   }
 
   void _toggleCup(int index) {
+    if (_trackerState.isGoalComplete) {
+      return;
+    }
     _updateState(_trackerState.toggleCup(index));
+  }
+
+  void _openGoalEditor() {
+    setState(() {
+      _isEditingGoal = true;
+      _step = FlowStep.goal;
+      _goalController.text = '${_trackerState.goalCups}';
+    });
   }
 
   void _showCompletionDialog() {
@@ -426,17 +456,22 @@ class _WaterFlowPageState extends State<WaterFlowPage>
                 child: switch (_step) {
                   FlowStep.goal => _GoalStep(
                     controller: _goalController,
-                    onStart: _startTracking,
+                    title:
+                        _isEditingGoal
+                            ? AppLocalizations.of(context).editGoalTitle
+                            : AppLocalizations.of(context).goalTitle,
+                    actionLabel:
+                        _isEditingGoal
+                            ? AppLocalizations.of(context).saveGoalButton
+                            : AppLocalizations.of(context).startTrackingButton,
+                    onStart: _saveGoal,
                     onMonthlyRecordTap: _openMonthlyHistory,
                   ),
                   FlowStep.tracker => _TrackerStep(
                     goalCups: _trackerState.goalCups,
                     drankCups: _trackerState.drankCups,
-                    cupStates: List<bool>.generate(
-                      _trackerState.goalCups,
-                      (index) => index < _trackerState.drankCups,
-                    ),
-                    onBack: () => setState(() => _step = FlowStep.goal),
+                    cupStates: _trackerState.cupStates,
+                    onEditGoalTap: _openGoalEditor,
                     onCupTap: _toggleCup,
                     onIncrement: _incrementCup,
                     onDecrement: _decrementCup,
@@ -447,7 +482,9 @@ class _WaterFlowPageState extends State<WaterFlowPage>
                     progress: _trackerState.progress,
                     remainingText:
                         _trackerState.isGoalComplete
-                            ? AppLocalizations.of(context).completionDialogTitle
+                            ? AppLocalizations.of(
+                              context,
+                            ).completionDialogContent
                             : AppLocalizations.of(
                               context,
                             ).trackerRemaining(_trackerState.remainingCups),
@@ -492,11 +529,15 @@ class _AmbientDrop extends StatelessWidget {
 class _GoalStep extends StatelessWidget {
   const _GoalStep({
     required this.controller,
+    required this.title,
+    required this.actionLabel,
     required this.onStart,
     required this.onMonthlyRecordTap,
   });
 
   final TextEditingController controller;
+  final String title;
+  final String actionLabel;
   final VoidCallback onStart;
   final VoidCallback onMonthlyRecordTap;
 
@@ -513,7 +554,7 @@ class _GoalStep extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n.goalTitle,
+              title,
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -540,10 +581,7 @@ class _GoalStep extends StatelessWidget {
               ).textTheme.bodySmall?.copyWith(color: _AppColors.textSecondary),
             ),
             const SizedBox(height: 18),
-            _PrimaryActionButton(
-              label: l10n.startTrackingButton,
-              onTap: onStart,
-            ),
+            _PrimaryActionButton(label: actionLabel, onTap: onStart),
           ],
         ),
         const Spacer(),
@@ -557,7 +595,7 @@ class _TrackerStep extends StatelessWidget {
     required this.goalCups,
     required this.drankCups,
     required this.cupStates,
-    required this.onBack,
+    required this.onEditGoalTap,
     required this.onCupTap,
     required this.onIncrement,
     required this.onDecrement,
@@ -570,7 +608,7 @@ class _TrackerStep extends StatelessWidget {
   final int goalCups;
   final int drankCups;
   final List<bool> cupStates;
-  final VoidCallback onBack;
+  final VoidCallback onEditGoalTap;
   final ValueChanged<int> onCupTap;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
@@ -582,6 +620,7 @@ class _TrackerStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final isGoalComplete = drankCups >= goalCups;
     final canIncrement = drankCups < goalCups;
     final canDecrement = drankCups > 0;
 
@@ -595,8 +634,8 @@ class _TrackerStep extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _Header(
-                    showBack: true,
-                    onBack: onBack,
+                    showEdit: true,
+                    onEditGoalTap: onEditGoalTap,
                     onMonthlyRecordTap: onMonthlyRecordTap,
                   ),
                   const Spacer(),
@@ -663,28 +702,40 @@ class _TrackerStep extends StatelessWidget {
                           children: List.generate(goalCups, (index) {
                             return WaterCup(
                               isFilled: cupStates[index],
-                              onTap: () => onCupTap(index),
+                              onTap:
+                                  isGoalComplete ? null : () => onCupTap(index),
                             );
                           }),
                         ),
                         const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _RoundControlButton(
-                              icon: Icons.remove,
-                              onTap: onDecrement,
-                              isDisabled: !canDecrement,
-                            ),
-                            const SizedBox(width: 16),
-                            _RoundControlButton(
-                              icon: Icons.add,
-                              onTap: onIncrement,
-                              filled: true,
-                              isDisabled: !canIncrement,
-                            ),
-                          ],
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child:
+                              isGoalComplete
+                                  ? const Text(
+                                    '🎉',
+                                    key: ValueKey('trackerCelebrationEmoji'),
+                                    style: TextStyle(fontSize: 38),
+                                  )
+                                  : Row(
+                                    key: const ValueKey('trackerControls'),
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _RoundControlButton(
+                                        icon: Icons.remove,
+                                        onTap: onDecrement,
+                                        isDisabled: !canDecrement,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      _RoundControlButton(
+                                        icon: Icons.add,
+                                        onTap: onIncrement,
+                                        filled: true,
+                                        isDisabled: !canIncrement,
+                                      ),
+                                    ],
+                                  ),
                         ),
                       ],
                     ),
@@ -702,13 +753,13 @@ class _TrackerStep extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   const _Header({
-    this.showBack = false,
-    this.onBack,
+    this.showEdit = false,
+    this.onEditGoalTap,
     required this.onMonthlyRecordTap,
   });
 
-  final bool showBack;
-  final VoidCallback? onBack;
+  final bool showEdit;
+  final VoidCallback? onEditGoalTap;
   final VoidCallback onMonthlyRecordTap;
 
   @override
@@ -717,14 +768,7 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        if (showBack)
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            color: _AppColors.iconSoft,
-          )
-        else
-          const SizedBox(width: 48),
+        const SizedBox(width: 98),
         Expanded(
           child: Text(
             l10n.appTitle,
@@ -734,10 +778,26 @@ class _Header extends StatelessWidget {
             ).textTheme.headlineMedium?.copyWith(color: _AppColors.header),
           ),
         ),
-        _HeaderIconButton(
-          icon: Icons.calendar_month_rounded,
-          tooltip: l10n.monthlyRecordButtonLabel,
-          onTap: onMonthlyRecordTap,
+        SizedBox(
+          width: 98,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (showEdit && onEditGoalTap != null) ...[
+                _HeaderIconButton(
+                  icon: Icons.edit_rounded,
+                  tooltip: l10n.editGoalButtonLabel,
+                  onTap: onEditGoalTap!,
+                ),
+                const SizedBox(width: 10),
+              ],
+              _HeaderIconButton(
+                icon: Icons.calendar_month_rounded,
+                tooltip: l10n.monthlyRecordButtonLabel,
+                onTap: onMonthlyRecordTap,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -914,20 +974,10 @@ class _MonthlyHistorySheetState extends State<_MonthlyHistorySheet> {
                   color: _AppColors.iconSoft,
                 ),
                 Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        l10n.monthlyRecordTitle,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: _AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        localizations.formatMonthYear(_visibleMonth),
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ],
+                  child: Text(
+                    localizations.formatMonthYear(_visibleMonth),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ),
                 IconButton(
