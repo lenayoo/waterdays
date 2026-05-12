@@ -111,15 +111,6 @@ class WaterTrackerState {
     );
   }
 
-  WaterTrackerState setDrankCups(int nextDrankCups) {
-    return copyWith(
-      filledCupIndices: List<int>.generate(
-        nextDrankCups.clamp(0, goalCups),
-        (index) => index,
-      ),
-    );
-  }
-
   WaterTrackerState incrementCup() {
     if (drankCups >= goalCups) {
       return this;

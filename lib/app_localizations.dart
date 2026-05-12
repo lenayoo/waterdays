@@ -124,9 +124,6 @@ class AppLocalizations {
   String get editGoalButtonLabel =>
       text(en: 'Edit goal', ko: '목표 수정', ja: '目標を変更');
 
-  String get monthlyRecordTitle =>
-      text(en: 'Monthly record', ko: '월 기록', ja: '月の記録');
-
   String monthlyRecordSummary({
     required int completedDays,
     required int missedDays,

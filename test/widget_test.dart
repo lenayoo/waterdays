@@ -209,7 +209,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.calendar_month_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.monthlyRecordTitle), findsNothing);
+    expect(find.text('Monthly record'), findsNothing);
     expect(find.text(l10n.calendarEmptyTitle), findsOneWidget);
   });
 }
