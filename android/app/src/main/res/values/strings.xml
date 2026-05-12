@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">Water Days</string>
+    <string name="widget_description">Check water progress and add one cup quickly.</string>
+    <string name="widget_add">+1</string>
+    <string name="widget_status_drink_water">Drink water</string>
+    <string name="widget_status_hydrated">Hydrated</string>
+    <string name="widget_status_done">You did it</string>
+    <string name="widget_goal_format">Goal %1$d cups</string>
+</resources>

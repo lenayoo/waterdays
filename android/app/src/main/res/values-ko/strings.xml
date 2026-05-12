@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">Water Days</string>
+    <string name="widget_description">오늘 물 섭취 상태를 확인하고 빠르게 1잔 추가할 수 있어요.</string>
+    <string name="widget_add">+1</string>
+    <string name="widget_status_drink_water">물 마셔요</string>
+    <string name="widget_status_hydrated">잘 마시고 있어요</string>
+    <string name="widget_status_done">해냈어요</string>
+    <string name="widget_goal_format">목표 %1$d잔</string>
+</resources>

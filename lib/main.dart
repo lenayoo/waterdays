@@ -1,14 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:waterdays/app_localizations.dart';
+import 'package:waterdays/water_reminder_service.dart';
+import 'package:waterdays/water_state.dart';
+import 'package:waterdays/water_state_store.dart';
 
-void main() {
-  runApp(const WaterDaysApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final reminderService = LocalWaterReminderService();
+  await reminderService.initialize();
+
+  runApp(
+    WaterDaysApp(
+      stateStore: SharedPrefsWaterStateStore(),
+      reminderService: reminderService,
+    ),
+  );
 }
-
-const MethodChannel _widgetChannel = MethodChannel(AppConfig.channelName);
 
 class _AppColors {
   const _AppColors._();
@@ -16,6 +28,9 @@ class _AppColors {
   static const primary = Color(0xFF5D9FD6);
   static const secondary = Color(0xFF8DBFE7);
   static const background = Color(0xFFF8FBFD);
+  static const panel = Colors.white;
+  static const panelSoft = Color(0xFFF2F8FC);
+  static const progressTrack = Color(0xFFD7E7F2);
   static const textPrimary = Color(0xFF21384B);
   static const textSecondary = Color(0xFF7A8E9F);
   static const textTertiary = Color(0xFF8A9BA9);
@@ -31,11 +46,20 @@ class _AppColors {
   static const filledDrop = Color(0xFF77CFFF);
   static const filledDropBorder = Color(0xFF5BB8F6);
   static const ambientDrop = Color(0xFFB7D9F0);
+  static const dotBlue = Color(0xFF5D9FD6);
+  static const dotRed = Color(0xFFE8867C);
 }
 
 class WaterDaysApp extends StatelessWidget {
-  const WaterDaysApp({super.key, this.locale});
+  const WaterDaysApp({
+    super.key,
+    required this.stateStore,
+    required this.reminderService,
+    this.locale,
+  });
 
+  final WaterStateStore stateStore;
+  final WaterReminderService reminderService;
   final Locale? locale;
 
   @override
@@ -47,6 +71,7 @@ class WaterDaysApp extends StatelessWidget {
         surface: _AppColors.background,
       ),
       scaffoldBackgroundColor: _AppColors.background,
+      platform: TargetPlatform.iOS,
       useMaterial3: true,
     );
 
@@ -62,63 +87,49 @@ class WaterDaysApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       localeResolutionCallback: _resolveLocale,
-      builder: (context, child) {
-        final localizations = AppLocalizations.of(context);
-        final textTheme = _localizedTextTheme(
-          baseTheme.textTheme,
-          localizations,
-        ).apply(
+      theme: baseTheme.copyWith(
+        textTheme: _appTextTheme(baseTheme.textTheme).apply(
           bodyColor: _AppColors.textPrimary,
           displayColor: _AppColors.textPrimary,
-        );
-
-        return Theme(
-          data: baseTheme.copyWith(
-            textTheme: textTheme,
-            dialogTheme: DialogThemeData(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              hintStyle: textTheme.bodyLarge?.copyWith(
-                color: _AppColors.textTertiary,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 18,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(color: _AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(color: _AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: _AppColors.primary,
-                  width: 1.3,
-                ),
-              ),
-            ),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
           ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
-      home: const WaterFlowPage(),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          hintStyle: baseTheme.textTheme.bodyLarge?.copyWith(
+            color: _AppColors.textTertiary,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 18,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _AppColors.primary, width: 1.3),
+          ),
+        ),
+      ),
+      home: WaterFlowPage(
+        stateStore: stateStore,
+        reminderService: reminderService,
+      ),
     );
   }
 
-  Locale _resolveLocale(
-    Locale? locale,
-    Iterable<Locale> supportedLocales,
-  ) {
+  Locale _resolveLocale(Locale? locale, Iterable<Locale> supportedLocales) {
     if (locale == null) {
       return supportedLocales.first;
     }
@@ -131,31 +142,30 @@ class WaterDaysApp extends StatelessWidget {
     return const Locale('en');
   }
 
-  TextTheme _localizedTextTheme(
-    TextTheme baseTextTheme,
-    AppLocalizations localizations,
-  ) {
-    final localized = switch (localizations.languageCode) {
-      'ko' => GoogleFonts.ibmPlexSansKrTextTheme(baseTextTheme),
-      'ja' => GoogleFonts.mPlus1pTextTheme(baseTextTheme),
-      _ => GoogleFonts.plusJakartaSansTextTheme(baseTextTheme),
-    };
-
-    return localized.copyWith(
-      headlineMedium: localized.headlineMedium?.copyWith(
+  TextTheme _appTextTheme(TextTheme baseTextTheme) {
+    return baseTextTheme.copyWith(
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(
         fontWeight: FontWeight.w700,
         letterSpacing: -0.5,
       ),
-      headlineSmall: localized.headlineSmall?.copyWith(
+      headlineSmall: baseTextTheme.headlineSmall?.copyWith(
         fontWeight: FontWeight.w700,
         letterSpacing: -0.3,
       ),
-      titleLarge: localized.titleLarge?.copyWith(
+      titleLarge: baseTextTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
         letterSpacing: -0.2,
       ),
-      bodyLarge: localized.bodyLarge?.copyWith(height: 1.3),
-      bodyMedium: localized.bodyMedium?.copyWith(height: 1.3),
+      titleMedium: baseTextTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      bodyLarge: baseTextTheme.bodyLarge?.copyWith(height: 1.3),
+      bodyMedium: baseTextTheme.bodyMedium?.copyWith(height: 1.3),
+      bodySmall: baseTextTheme.bodySmall?.copyWith(height: 1.3),
+      labelSmall: baseTextTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
+      ),
     );
   }
 }
@@ -182,37 +192,138 @@ class _GoalLimitFormatter extends TextInputFormatter {
 }
 
 class WaterFlowPage extends StatefulWidget {
-  const WaterFlowPage({super.key});
+  const WaterFlowPage({
+    super.key,
+    required this.stateStore,
+    required this.reminderService,
+  });
+
+  final WaterStateStore stateStore;
+  final WaterReminderService reminderService;
 
   @override
   State<WaterFlowPage> createState() => _WaterFlowPageState();
 }
 
-class _WaterFlowPageState extends State<WaterFlowPage> {
+class _WaterFlowPageState extends State<WaterFlowPage>
+    with WidgetsBindingObserver {
   final TextEditingController _goalController = TextEditingController(
     text: '${AppConfig.defaultGoalCups}',
   );
 
+  WaterTrackerState _trackerState = WaterTrackerState.initial();
   FlowStep _step = FlowStep.goal;
-  int _goalCups = AppConfig.defaultGoalCups;
-  List<bool> _cupStates = List<bool>.filled(AppConfig.defaultGoalCups, false);
   bool _completionShown = false;
+  bool _isLoading = true;
+  bool _isRestoring = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncWidget());
+    WidgetsBinding.instance.addObserver(this);
+    _restoreState(requestPermissions: true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _goalController.dispose();
     super.dispose();
   }
 
-  int get _drankCups => _cupStates.where((filled) => filled).length;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _restoreState();
+    }
+  }
 
-  bool get _isGoalComplete => _drankCups >= _goalCups;
+  Future<void> _restoreState({bool requestPermissions = false}) async {
+    if (_isRestoring) {
+      return;
+    }
+
+    _isRestoring = true;
+    final now = DateTime.now();
+    var nextState = (await widget.stateStore.load()).normalizeForDate(now);
+    final launchAction = await widget.stateStore.consumeLaunchAction();
+
+    if (launchAction == LaunchActions.quickAdd &&
+        nextState.hasStartedTracking &&
+        !nextState.isGoalComplete) {
+      nextState = nextState.incrementCup();
+    }
+
+    await widget.stateStore.save(nextState);
+
+    if (!mounted) {
+      _isRestoring = false;
+      return;
+    }
+
+    setState(() {
+      _trackerState = nextState;
+      _step = nextState.hasStartedTracking ? FlowStep.tracker : FlowStep.goal;
+      _goalController.text = '${nextState.goalCups}';
+      _completionShown = nextState.isGoalComplete;
+      _isLoading = false;
+    });
+
+    await widget.reminderService.syncReminder(
+      state: nextState,
+      l10n: AppLocalizations.of(context),
+    );
+
+    if (requestPermissions) {
+      unawaited(widget.reminderService.requestPermissions());
+    }
+
+    _isRestoring = false;
+  }
+
+  Future<void> _updateState(
+    WaterTrackerState nextState, {
+    FlowStep? nextStep,
+    bool requestPermissions = false,
+  }) async {
+    final wasComplete = _trackerState.isGoalComplete;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _trackerState = nextState;
+      _step = nextStep ?? _step;
+      _goalController.text = '${nextState.goalCups}';
+      if (!nextState.isGoalComplete) {
+        _completionShown = false;
+      }
+    });
+
+    await widget.stateStore.save(nextState);
+    if (!mounted) {
+      return;
+    }
+
+    await widget.reminderService.syncReminder(
+      state: nextState,
+      l10n: AppLocalizations.of(context),
+    );
+
+    if (requestPermissions) {
+      unawaited(widget.reminderService.requestPermissions());
+    }
+
+    if (!wasComplete && nextState.isGoalComplete && !_completionShown) {
+      _completionShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showCompletionDialog();
+        }
+      });
+    }
+  }
 
   void _startTracking() {
     final parsed = int.tryParse(_goalController.text.trim());
@@ -220,76 +331,35 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
       return;
     }
 
-    setState(() {
-      _goalCups = parsed;
-      _cupStates = List<bool>.filled(_goalCups, false);
-      _completionShown = false;
-      _step = FlowStep.tracker;
-    });
-    _syncWidget();
+    final nextState = _trackerState
+        .normalizeForDate(DateTime.now())
+        .startTracking(parsed, now: DateTime.now());
+    _updateState(
+      nextState,
+      nextStep: FlowStep.tracker,
+      requestPermissions: true,
+    );
   }
 
   void _incrementCup() {
-    final nextIndex = _cupStates.indexWhere((filled) => !filled);
-    if (nextIndex == -1) {
+    if (_trackerState.isGoalComplete) {
       return;
     }
-
-    _updateCupState(nextIndex, true);
+    _updateState(_trackerState.incrementCup());
   }
 
   void _decrementCup() {
-    final lastFilledIndex = _cupStates.lastIndexWhere((filled) => filled);
-    if (lastFilledIndex == -1) {
+    if (_trackerState.drankCups <= 0) {
       return;
     }
-
-    _updateCupState(lastFilledIndex, false);
+    _updateState(_trackerState.decrementCup());
   }
 
   void _toggleCup(int index) {
-    if (!_isValidCupIndex(index)) {
-      return;
-    }
-
-    _updateCupState(index, !_cupStates[index]);
-  }
-
-  bool _isValidCupIndex(int index) {
-    return index >= 0 && index < _cupStates.length;
-  }
-
-  void _updateCupState(int index, bool isFilled) {
-    if (!_isValidCupIndex(index) || _cupStates[index] == isFilled) {
-      return;
-    }
-
-    setState(() {
-      _cupStates[index] = isFilled;
-      if (!_isGoalComplete) {
-        _completionShown = false;
-      }
-    });
-    _handleCupChange();
-  }
-
-  void _handleCupChange() {
-    final completed = _isGoalComplete;
-    _syncWidget();
-
-    if (!completed || _completionShown) {
-      return;
-    }
-
-    _completionShown = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _showCompletionDialog());
+    _updateState(_trackerState.toggleCup(index));
   }
 
   void _showCompletionDialog() {
-    if (!mounted) {
-      return;
-    }
-
     final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
@@ -307,19 +377,33 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
     );
   }
 
-  Future<void> _syncWidget() async {
-    try {
-      await _widgetChannel.invokeMethod<void>('updateWaterProgress', {
-        'drankCups': _drankCups,
-        'goalCups': _goalCups,
-      });
-    } on PlatformException {
-      // iOS widget sync is optional while running on other platforms.
-    }
+  void _openMonthlyHistory() {
+    final platform = Theme.of(context).platform;
+    final heightFactor = platform == TargetPlatform.android ? 0.88 : 0.78;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: heightFactor,
+          child: _MonthlyHistorySheet(trackerState: _trackerState),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: _AppColors.primary),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -335,7 +419,7 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
               child: _AmbientDrop(size: 84, opacity: 0.12),
             ),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
+              duration: const Duration(milliseconds: 260),
               child: Padding(
                 key: ValueKey(_step),
                 padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
@@ -343,15 +427,31 @@ class _WaterFlowPageState extends State<WaterFlowPage> {
                   FlowStep.goal => _GoalStep(
                     controller: _goalController,
                     onStart: _startTracking,
+                    onMonthlyRecordTap: _openMonthlyHistory,
                   ),
                   FlowStep.tracker => _TrackerStep(
-                    goalCups: _goalCups,
-                    drankCups: _drankCups,
-                    cupStates: _cupStates,
+                    goalCups: _trackerState.goalCups,
+                    drankCups: _trackerState.drankCups,
+                    cupStates: List<bool>.generate(
+                      _trackerState.goalCups,
+                      (index) => index < _trackerState.drankCups,
+                    ),
                     onBack: () => setState(() => _step = FlowStep.goal),
                     onCupTap: _toggleCup,
                     onIncrement: _incrementCup,
                     onDecrement: _decrementCup,
+                    statusText: AppLocalizations.of(context).trackerStatus(
+                      _trackerState.drankCups,
+                      _trackerState.goalCups,
+                    ),
+                    progress: _trackerState.progress,
+                    remainingText:
+                        _trackerState.isGoalComplete
+                            ? AppLocalizations.of(context).completionDialogTitle
+                            : AppLocalizations.of(
+                              context,
+                            ).trackerRemaining(_trackerState.remainingCups),
+                    onMonthlyRecordTap: _openMonthlyHistory,
                   ),
                 },
               ),
@@ -379,7 +479,9 @@ class _AmbientDrop extends StatelessWidget {
           painter: _WaterDropPainter(
             fillColor: _AppColors.ambientDrop.withValues(alpha: opacity),
             highlightColor: Colors.white.withValues(alpha: opacity * 0.7),
-            borderColor: _AppColors.ambientDrop.withValues(alpha: opacity * 1.2),
+            borderColor: _AppColors.ambientDrop.withValues(
+              alpha: opacity * 1.2,
+            ),
           ),
         ),
       ),
@@ -388,10 +490,15 @@ class _AmbientDrop extends StatelessWidget {
 }
 
 class _GoalStep extends StatelessWidget {
-  const _GoalStep({required this.controller, required this.onStart});
+  const _GoalStep({
+    required this.controller,
+    required this.onStart,
+    required this.onMonthlyRecordTap,
+  });
 
   final TextEditingController controller;
   final VoidCallback onStart;
+  final VoidCallback onMonthlyRecordTap;
 
   @override
   Widget build(BuildContext context) {
@@ -400,7 +507,7 @@ class _GoalStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Header(),
+        _Header(onMonthlyRecordTap: onMonthlyRecordTap),
         const Spacer(),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,6 +561,10 @@ class _TrackerStep extends StatelessWidget {
     required this.onCupTap,
     required this.onIncrement,
     required this.onDecrement,
+    required this.statusText,
+    required this.progress,
+    required this.remainingText,
+    required this.onMonthlyRecordTap,
   });
 
   final int goalCups;
@@ -463,6 +574,10 @@ class _TrackerStep extends StatelessWidget {
   final ValueChanged<int> onCupTap;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
+  final String statusText;
+  final double progress;
+  final String remainingText;
+  final VoidCallback onMonthlyRecordTap;
 
   @override
   Widget build(BuildContext context) {
@@ -479,16 +594,66 @@ class _TrackerStep extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Header(showBack: true, onBack: onBack),
+                  _Header(
+                    showBack: true,
+                    onBack: onBack,
+                    onMonthlyRecordTap: onMonthlyRecordTap,
+                  ),
                   const Spacer(),
                   Center(
                     child: Column(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _AppColors.panelSoft,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: _AppColors.border),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(color: _AppColors.iconSoft),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          '$drankCups / $goalCups',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          remainingText,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: _AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: 220,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: LinearProgressIndicator(
+                              minHeight: 10,
+                              value: progress.clamp(0, 1),
+                              backgroundColor: _AppColors.progressTrack,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                _AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
                         Text(
                           l10n.trackerGoal(goalCups),
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: _AppColors.textSecondary),
                         ),
                         const SizedBox(height: 28),
                         Wrap(
@@ -536,10 +701,15 @@ class _TrackerStep extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({this.showBack = false, this.onBack});
+  const _Header({
+    this.showBack = false,
+    this.onBack,
+    required this.onMonthlyRecordTap,
+  });
 
   final bool showBack;
   final VoidCallback? onBack;
+  final VoidCallback onMonthlyRecordTap;
 
   @override
   Widget build(BuildContext context) {
@@ -559,13 +729,50 @@ class _Header extends StatelessWidget {
           child: Text(
             l10n.appTitle,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: _AppColors.header,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(color: _AppColors.header),
           ),
         ),
-        const SizedBox(width: 48),
+        _HeaderIconButton(
+          icon: Icons.calendar_month_rounded,
+          tooltip: l10n.monthlyRecordButtonLabel,
+          onTap: onMonthlyRecordTap,
+        ),
       ],
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _AppColors.border),
+          ),
+          child: Icon(icon, size: 22, color: _AppColors.iconSoft),
+        ),
+      ),
     );
   }
 }
@@ -636,27 +843,360 @@ class _RoundControlButton extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: backgroundColor,
-          border: Border.all(
-            color: borderColor,
-            width: 1.4,
-          ),
+          border: Border.all(color: borderColor, width: 1.4),
         ),
-        child: Icon(
-          icon,
-          size: 30,
-          color: iconColor,
-        ),
+        child: Icon(icon, size: 30, color: iconColor),
       ),
     );
   }
 }
 
+class _MonthlyHistorySheet extends StatefulWidget {
+  const _MonthlyHistorySheet({required this.trackerState});
+
+  final WaterTrackerState trackerState;
+
+  @override
+  State<_MonthlyHistorySheet> createState() => _MonthlyHistorySheetState();
+}
+
+class _MonthlyHistorySheetState extends State<_MonthlyHistorySheet> {
+  late DateTime _visibleMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _visibleMonth = DateTime(now.year, now.month);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final localizations = MaterialLocalizations.of(context);
+    final monthRecords = _monthRecords();
+    final completedDays =
+        monthRecords.values.where((record) => record.metGoal).length;
+    final missedDays = monthRecords.length - completedDays;
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: _AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.fromLTRB(20, isAndroid ? 8 : 12, 20, 24),
+        child: Column(
+          children: [
+            Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _AppColors.border,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _visibleMonth = DateTime(
+                        _visibleMonth.year,
+                        _visibleMonth.month - 1,
+                      );
+                    });
+                  },
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  color: _AppColors.iconSoft,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        l10n.monthlyRecordTitle,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: _AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        localizations.formatMonthYear(_visibleMonth),
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _visibleMonth = DateTime(
+                        _visibleMonth.year,
+                        _visibleMonth.month + 1,
+                      );
+                    });
+                  },
+                  icon: const Icon(Icons.chevron_right_rounded),
+                  color: _AppColors.iconSoft,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Text(
+                      l10n.monthlyRecordSummary(
+                        completedDays: completedDays,
+                        missedDays: missedDays,
+                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _CalendarGrid(
+                      month: _visibleMonth,
+                      trackerState: widget.trackerState,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _LegendDot(
+                          color: _AppColors.dotBlue,
+                          label: l10n.calendarLegendComplete,
+                        ),
+                        const SizedBox(width: 18),
+                        _LegendDot(
+                          color: _AppColors.dotRed,
+                          label: l10n.calendarLegendMissed,
+                        ),
+                      ],
+                    ),
+                    if (monthRecords.isEmpty) ...[
+                      const SizedBox(height: 18),
+                      Text(
+                        l10n.calendarEmptyTitle,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.calendarEmptyBody,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: _AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, WaterHistoryRecord> _monthRecords() {
+    final result = <String, WaterHistoryRecord>{};
+    final now = DateTime.now();
+
+    for (final entry in widget.trackerState.history.entries) {
+      final date = dateFromKey(entry.key);
+      if (date == null) {
+        continue;
+      }
+      if (date.year == _visibleMonth.year &&
+          date.month == _visibleMonth.month) {
+        result[entry.key] = entry.value;
+      }
+    }
+
+    if (widget.trackerState.hasStartedTracking) {
+      final todayKey = widget.trackerState.currentDateKey;
+      final today = dateFromKey(todayKey) ?? now;
+      if (today.year == _visibleMonth.year &&
+          today.month == _visibleMonth.month) {
+        result[todayKey] = WaterHistoryRecord(
+          goalCups: widget.trackerState.goalCups,
+          drankCups: widget.trackerState.drankCups,
+        );
+      }
+    }
+
+    return result;
+  }
+}
+
+class _CalendarGrid extends StatelessWidget {
+  const _CalendarGrid({required this.month, required this.trackerState});
+
+  final DateTime month;
+  final WaterTrackerState trackerState;
+
+  @override
+  Widget build(BuildContext context) {
+    final materialLocalizations = MaterialLocalizations.of(context);
+    final dayLabels = _weekdayLabels(materialLocalizations);
+    final cells = _buildCells(materialLocalizations.firstDayOfWeekIndex);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: _AppColors.panel,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children:
+                dayLabels.map((label) {
+                  return Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: _AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cells.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 6,
+              childAspectRatio: 0.82,
+            ),
+            itemBuilder: (context, index) {
+              final cell = cells[index];
+              if (cell == null) {
+                return const SizedBox.shrink();
+              }
+
+              final record = trackerState.recordForDate(cell);
+              final today = DateTime.now();
+              final isToday =
+                  cell.year == today.year &&
+                  cell.month == today.month &&
+                  cell.day == today.day;
+              final isFuture = cell.isAfter(
+                DateTime(today.year, today.month, today.day),
+              );
+
+              Color? dotColor;
+              if (!isFuture && record != null) {
+                dotColor =
+                    record.metGoal ? _AppColors.dotBlue : _AppColors.dotRed;
+              }
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: isToday ? _AppColors.panelSoft : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  border: isToday ? Border.all(color: _AppColors.border) : null,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${cell.day}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color:
+                            isFuture
+                                ? _AppColors.textTertiary
+                                : _AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 8,
+                      height: 8,
+                      child:
+                          dotColor == null
+                              ? const SizedBox.shrink()
+                              : DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: dotColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _weekdayLabels(MaterialLocalizations localizations) {
+    final firstDayIndex = localizations.firstDayOfWeekIndex;
+    return List<String>.generate(7, (index) {
+      return localizations.narrowWeekdays[(firstDayIndex + index) % 7];
+    });
+  }
+
+  List<DateTime?> _buildCells(int firstDayOfWeekIndex) {
+    final firstDay = DateTime(month.year, month.month);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final sundayBasedWeekday = firstDay.weekday % 7;
+    final leadingEmpty = (sundayBasedWeekday - firstDayOfWeekIndex + 7) % 7;
+
+    final cells = List<DateTime?>.filled(42, null);
+    for (var day = 1; day <= daysInMonth; day++) {
+      cells[leadingEmpty + day - 1] = DateTime(month.year, month.month, day);
+    }
+    return cells;
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: _AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
 class WaterCup extends StatelessWidget {
-  const WaterCup({
-    super.key,
-    required this.isFilled,
-    this.onTap,
-  });
+  const WaterCup({super.key, required this.isFilled, this.onTap});
 
   final bool isFilled;
   final VoidCallback? onTap;
@@ -681,7 +1221,8 @@ class WaterCup extends StatelessWidget {
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(28)),
           child: CustomPaint(
             painter: _WaterDropPainter(
-              fillColor: isFilled ? _AppColors.filledDrop : _AppColors.emptyDrop,
+              fillColor:
+                  isFilled ? _AppColors.filledDrop : _AppColors.emptyDrop,
               highlightColor:
                   isFilled
                       ? Colors.white.withValues(alpha: 0.52)

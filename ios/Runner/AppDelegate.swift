@@ -7,6 +7,7 @@ private enum WaterWidgetStore {
   static let channelName = "waterdays/widget"
   static let drankKey = "drankCups"
   static let goalKey = "goalCups"
+  static let currentDateKey = "currentDateKey"
 }
 
 @main
@@ -33,6 +34,7 @@ private enum WaterWidgetStore {
           let args = call.arguments as? [String: Any],
           let drank = args["drankCups"] as? Int,
           let goal = args["goalCups"] as? Int,
+          let currentDateKey = args["currentDateKey"] as? String,
           let defaults = UserDefaults(suiteName: WaterWidgetStore.suiteName)
         else {
           result(
@@ -47,6 +49,7 @@ private enum WaterWidgetStore {
 
         defaults.set(drank, forKey: WaterWidgetStore.drankKey)
         defaults.set(goal, forKey: WaterWidgetStore.goalKey)
+        defaults.set(currentDateKey, forKey: WaterWidgetStore.currentDateKey)
 
         if #available(iOS 14.0, *) {
           WidgetCenter.shared.reloadAllTimelines()

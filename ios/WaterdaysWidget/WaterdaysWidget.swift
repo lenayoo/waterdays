@@ -5,6 +5,7 @@ private enum WidgetStore {
   static let suiteName = "group.com.verydays.waterdays.shared"
   static let drankKey = "drankCups"
   static let goalKey = "goalCups"
+  static let currentDateKey = "currentDateKey"
   static let defaultGoal = 8
 }
 
@@ -55,6 +56,30 @@ private struct WidgetCopy {
     default: return "Check today's water progress and goal at a glance."
     }
   }
+
+  func statusText(drankCups: Int, goalCups: Int) -> String {
+    if drankCups <= 0 {
+      switch languageCode {
+      case "ko": return "물 마셔요"
+      case "ja": return "水を飲もう"
+      default: return "Drink water"
+      }
+    }
+
+    if drankCups >= goalCups {
+      switch languageCode {
+      case "ko": return "해냈어요"
+      case "ja": return "できました"
+      default: return "You did it"
+      }
+    }
+
+    switch languageCode {
+    case "ko": return "잘 마시고 있어요"
+    case "ja": return "いい調子"
+    default: return "Hydrated"
+    }
+  }
 }
 
 struct WaterdaysEntry: TimelineEntry {
@@ -81,7 +106,9 @@ struct WaterdaysProvider: TimelineProvider {
   private func loadEntry() -> WaterdaysEntry {
     let defaults = UserDefaults(suiteName: WidgetStore.suiteName)
     let goal = max(storedInt(for: defaults, key: WidgetStore.goalKey, fallback: WidgetStore.defaultGoal), 1)
-    let drank = min(max(storedInt(for: defaults, key: WidgetStore.drankKey, fallback: 0), 0), goal)
+    let storedDateKey = defaults?.string(forKey: WidgetStore.currentDateKey) ?? todayKey()
+    let rawDrank = min(max(storedInt(for: defaults, key: WidgetStore.drankKey, fallback: 0), 0), goal)
+    let drank = storedDateKey == todayKey() ? rawDrank : 0
     return WaterdaysEntry(date: Date(), drankCups: drank, goalCups: goal)
   }
 
@@ -91,11 +118,20 @@ struct WaterdaysProvider: TimelineProvider {
     }
     return defaults.integer(forKey: key)
   }
+
+  private func todayKey() -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar.current
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.string(from: Date())
+  }
 }
 
 struct WaterdaysWidgetEntryView: View {
   var entry: WaterdaysProvider.Entry
   @Environment(\.widgetFamily) private var family
+  private let copy = WidgetCopy()
 
   private var progress: Double {
     guard entry.goalCups > 0 else { return 0 }
@@ -107,13 +143,7 @@ struct WaterdaysWidgetEntryView: View {
   }
 
   private var statusText: String {
-    if isGoalComplete {
-      return "Completed♥️"
-    }
-    if entry.drankCups == 0 {
-      return "Drink water!"
-    }
-    return "Hydrated...💧"
+    copy.statusText(drankCups: entry.drankCups, goalCups: entry.goalCups)
   }
 
   private var progressValueText: String {

@@ -2,14 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:waterdays/app_localizations.dart';
 import 'package:waterdays/main.dart';
+import 'package:waterdays/water_reminder_service.dart';
+import 'package:waterdays/water_state_store.dart';
 
 void main() {
   testWidgets('goal input is capped and tracker opens from the main screen', (
     WidgetTester tester,
   ) async {
     final l10n = AppLocalizations(const Locale('ko'));
+    final store = MemoryWaterStateStore();
 
-    await tester.pumpWidget(const WaterDaysApp(locale: Locale('ko')));
+    await tester.pumpWidget(
+      WaterDaysApp(
+        locale: const Locale('ko'),
+        stateStore: store,
+        reminderService: NoopWaterReminderService(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final goalField = find.byType(TextField);
@@ -30,8 +39,15 @@ void main() {
     WidgetTester tester,
   ) async {
     final l10n = AppLocalizations(const Locale('ko'));
+    final store = MemoryWaterStateStore();
 
-    await tester.pumpWidget(const WaterDaysApp(locale: Locale('ko')));
+    await tester.pumpWidget(
+      WaterDaysApp(
+        locale: const Locale('ko'),
+        stateStore: store,
+        reminderService: NoopWaterReminderService(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), '6');
@@ -47,7 +63,7 @@ void main() {
     }
     await tester.pump();
 
-    expect(find.text(l10n.completionDialogTitle), findsOneWidget);
+    expect(find.text(l10n.completionDialogContent), findsOneWidget);
     expect(find.text(l10n.completionDialogAction), findsOneWidget);
 
     await tester.tap(find.text(l10n.completionDialogAction));
@@ -58,8 +74,15 @@ void main() {
     WidgetTester tester,
   ) async {
     final l10n = AppLocalizations(const Locale('en'));
+    final store = MemoryWaterStateStore();
 
-    await tester.pumpWidget(const WaterDaysApp(locale: Locale('en')));
+    await tester.pumpWidget(
+      WaterDaysApp(
+        locale: const Locale('en'),
+        stateStore: store,
+        reminderService: NoopWaterReminderService(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), '2');
@@ -72,14 +95,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
 
-    expect(find.text(l10n.completionDialogTitle), findsOneWidget);
+    expect(find.text(l10n.completionDialogContent), findsOneWidget);
     await tester.tap(find.text(l10n.completionDialogAction));
     await tester.pump(const Duration(milliseconds: 350));
 
     await tester.tap(find.byType(WaterCup).at(1));
     await tester.pump(const Duration(milliseconds: 350));
 
-    expect(tester.widget<WaterCup>(find.byType(WaterCup).at(0)).isFilled, isTrue);
+    expect(
+      tester.widget<WaterCup>(find.byType(WaterCup).at(0)).isFilled,
+      isTrue,
+    );
     expect(
       tester.widget<WaterCup>(find.byType(WaterCup).at(1)).isFilled,
       isFalse,
@@ -89,6 +115,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
 
-    expect(find.text(l10n.completionDialogTitle), findsOneWidget);
+    expect(find.text(l10n.completionDialogContent), findsOneWidget);
+  });
+
+  testWidgets('monthly history sheet opens on small screens without overflow', (
+    WidgetTester tester,
+  ) async {
+    final l10n = AppLocalizations(const Locale('en'));
+    final store = MemoryWaterStateStore();
+
+    await tester.binding.setSurfaceSize(const Size(390, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      WaterDaysApp(
+        locale: const Locale('en'),
+        stateStore: store,
+        reminderService: NoopWaterReminderService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.calendar_month_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.monthlyRecordTitle), findsOneWidget);
   });
 }
