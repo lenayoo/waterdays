@@ -768,7 +768,17 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        const SizedBox(width: 98),
+        SizedBox(
+          width: 44,
+          child:
+              showEdit && onEditGoalTap != null
+                  ? _HeaderIconButton(
+                    icon: Icons.edit_rounded,
+                    tooltip: l10n.editGoalButtonLabel,
+                    onTap: onEditGoalTap!,
+                  )
+                  : const SizedBox.shrink(),
+        ),
         Expanded(
           child: Text(
             l10n.appTitle,
@@ -779,24 +789,11 @@ class _Header extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 98,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (showEdit && onEditGoalTap != null) ...[
-                _HeaderIconButton(
-                  icon: Icons.edit_rounded,
-                  tooltip: l10n.editGoalButtonLabel,
-                  onTap: onEditGoalTap!,
-                ),
-                const SizedBox(width: 10),
-              ],
-              _HeaderIconButton(
-                icon: Icons.calendar_month_rounded,
-                tooltip: l10n.monthlyRecordButtonLabel,
-                onTap: onMonthlyRecordTap,
-              ),
-            ],
+          width: 44,
+          child: _HeaderIconButton(
+            icon: Icons.calendar_month_rounded,
+            tooltip: l10n.monthlyRecordButtonLabel,
+            onTap: onMonthlyRecordTap,
           ),
         ),
       ],
