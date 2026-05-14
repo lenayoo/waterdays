@@ -1,4 +1,4 @@
-package com.example.waterdays
+package com.verydays.waterdays
 
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity

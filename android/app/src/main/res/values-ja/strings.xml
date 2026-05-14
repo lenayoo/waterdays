@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_name">Water Days</string>
     <string name="widget_description">今日の水分状況を確認して、すばやく1杯追加できます。</string>
     <string name="widget_add">+1</string>
     <string name="widget_status_drink_water">水を飲もう</string>

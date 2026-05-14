@@ -39,7 +39,7 @@ class LocalWaterReminderService implements WaterReminderService {
     }
 
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
+      '@mipmap/launcher_icon',
     );
     const darwinSettings = DarwinInitializationSettings();
     const settings = InitializationSettings(

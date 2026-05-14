@@ -1,4 +1,4 @@
-package com.example.waterdays
+package com.verydays.waterdays
 
 import android.app.AlarmManager
 import android.app.PendingIntent
